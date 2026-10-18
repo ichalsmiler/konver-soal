@@ -139,14 +139,17 @@
     box.innerHTML = '';
     const nums = numbers();
     const settings = cfg();
-    for (const type of ['mc', 'essay']) {
-      const list = state.questions.filter(q => q.type === type);
-      if (!list.length) continue;
-      const h = document.createElement('div');
-      h.className = 'section-title';
-      h.textContent = type === 'mc' ? settings.mcTitle + ' (' + list.length + ')' : 'Essay (' + list.length + ')';
-      box.appendChild(h);
-      for (const q of list) box.appendChild(card(q, nums.get(q.id), settings));
+    // Urutan mengikuti dokumen asli; judul bagian muncul tiap kali jenis soal berganti.
+    let prevType = null;
+    for (const q of state.questions) {
+      if (q.type !== prevType) {
+        const h = document.createElement('div');
+        h.className = 'section-title';
+        h.textContent = q.type === 'mc' ? settings.mcTitle : 'Essay';
+        box.appendChild(h);
+        prevType = q.type;
+      }
+      box.appendChild(card(q, nums.get(q.id), settings));
     }
     renderSide();
     applyFilter();
@@ -235,13 +238,6 @@
   const find = id => state.questions.find(q => q.id === id);
   const qOf = el => { const c = el.closest('.q'); return c ? find(parseInt(c.dataset.id, 10)) : null; };
 
-  function sameTypeNeighbor(q, dir) {
-    const list = state.questions;
-    let i = list.indexOf(q) + dir;
-    while (i >= 0 && i < list.length && list[i].type !== q.type) i += dir;
-    return i >= 0 && i < list.length ? i : -1;
-  }
-
   function onAction(btn) {
     const q = qOf(btn);
     if (!q) return;
@@ -257,8 +253,8 @@
       return;
     }
     if (act === 'up' || act === 'down') {
-      const j = sameTypeNeighbor(q, act === 'up' ? -1 : 1);
-      if (j < 0) return;
+      const j = idx + (act === 'up' ? -1 : 1);
+      if (j < 0 || j >= list.length) return;
       list[idx] = list[j]; list[j] = q;
     } else if (act === 'del') {
       if (!confirm('Hapus soal ini?')) return;
@@ -353,9 +349,7 @@
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
     if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
-    const mc = state.questions.filter(q => q.type === 'mc');
-    const essay = state.questions.filter(q => q.type === 'essay');
-    const rtf = RtfWriter.build(mc.concat(essay), settings);
+    const rtf = RtfWriter.build(state.questions, settings);
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

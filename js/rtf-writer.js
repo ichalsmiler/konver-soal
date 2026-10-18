@@ -98,7 +98,6 @@
     const fs = '\\fs' + Math.round(cfg.fontSize * 2);
     const base = '\\f0' + fs;
     const mc = questions.filter(q => q.type === 'mc');
-    const essay = questions.filter(q => q.type === 'essay');
 
     // listid 1 = nomor PG, 2 = nomor essay, 1000+i = opsi soal ke-i
     const lists = [listDef(1, 0, 360), listDef(2, 0, 360)];
@@ -129,23 +128,25 @@
       if (!q.stem.length) listPara(ls, n + '.', 360, '');
     };
 
-    if (mc.length) {
-      para('', esc(cfg.mcTitle));
-      mc.forEach((q, i) => {
+    // Urutan mengikuti dokumen asli. Judul bagian ditulis setiap kali jenis soal
+    // berganti; nomor PG dan essay masing-masing berlanjut (sama dengan preview).
+    let prevType = null;
+    let nMc = 0, nEssay = 0;
+    for (const q of questions) {
+      if (q.type !== prevType) {
+        if (prevType && !cfg.blankLine) para('', '');
+        para('', esc(q.type === 'mc' ? cfg.mcTitle : cfg.essayTitle));
+        prevType = q.type;
+      }
+      if (q.type === 'mc') {
+        const i = nMc++;
         stemParas(q, 1, i + 1);
         q.options.forEach((o, k) => listPara(3 + i, String.fromCharCode(97 + k) + '.', 720, runs(o)));
-        para('\\li360\\lin360', 'ANS: ' + esc(q.answer || ''));
-        if (cfg.blankLine) para('', '');
-      });
-    }
-    if (essay.length) {
-      if (mc.length) para('', '');
-      para('', esc(cfg.essayTitle));
-      essay.forEach((q, i) => {
-        stemParas(q, 2, i + 1);
-        para('\\li360\\lin360', 'ANS: ' + esc(q.answer || ''));
-        if (cfg.blankLine) para('', '');
-      });
+      } else {
+        stemParas(q, 2, ++nEssay);
+      }
+      para('\\li360\\lin360', 'ANS: ' + esc(q.answer || ''));
+      if (cfg.blankLine) para('', '');
     }
 
     return '{\\rtf1\\ansi\\ansicpg1252\\deff0\\uc1\\deflang1057\n' +
