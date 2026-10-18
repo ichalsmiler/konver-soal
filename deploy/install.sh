@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+#
+# Installer Konver Soal untuk Ubuntu Server (20.04 / 22.04 / 24.04).
+# Aplikasi ini statis (HTML/JS), jadi cukup dilayani nginx.
+#
+# Pemakaian (dari dalam folder hasil git clone):
+#   sudo bash deploy/install.sh                         # http://IP-SERVER/
+#   sudo bash deploy/install.sh --port 8080             # http://IP-SERVER:8080/
+#   sudo bash deploy/install.sh --domain soal.sekolah.sch.id
+#   sudo bash deploy/install.sh --domain soal.sekolah.sch.id --email admin@sekolah.sch.id   # + HTTPS
+#   sudo bash deploy/install.sh --update                # git pull lalu pasang ulang
+#   sudo bash deploy/install.sh --uninstall
+#
+set -euo pipefail
+
+APP="konver-soal"
+REPO_URL="${REPO_URL:-https://github.com/ichalsmiler/konver-soal.git}"
+WEB_DIR="/var/www/${APP}"
+SITE_FILE="/etc/nginx/sites-available/${APP}"
+SITE_LINK="/etc/nginx/sites-enabled/${APP}"
+CLONE_DIR="/opt/${APP}"
+
+DOMAIN=""
+PORT="80"
+EMAIL=""
+MODE="install"
+
+c_ok=$'\e[32m'; c_warn=$'\e[33m'; c_err=$'\e[31m'; c_off=$'\e[0m'
+info() { echo "${c_ok}==>${c_off} $*"; }
+warn() { echo "${c_warn}[!]${c_off} $*"; }
+die()  { echo "${c_err}[x]${c_off} $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+Pemakaian: sudo bash deploy/install.sh [opsi]
+  --port N        port HTTP (bawaan 80)
+  --domain NAMA   nama domain, mis. soal.sekolah.sch.id
+  --email ALAMAT  aktifkan HTTPS Let's Encrypt (butuh --domain)
+  --update        git pull lalu pasang ulang (konfigurasi lama dipertahankan)
+  --uninstall     hapus situs dari nginx
+EOF
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --domain)    DOMAIN="${2:-}"; shift 2 ;;
+    --port)      PORT="${2:-}"; shift 2 ;;
+    --email)     EMAIL="${2:-}"; shift 2 ;;
+    --update)    MODE="update"; shift ;;
+    --uninstall) MODE="uninstall"; shift ;;
+    -h|--help)   usage ;;
+    *) die "Opsi tidak dikenal: $1 (lihat --help)" ;;
+  esac
+done
+
+[[ $EUID -eq 0 ]] || die "Jalankan dengan sudo: sudo bash $0 $*"
+[[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || die "Port tidak valid: $PORT"
+if [[ -n "$EMAIL" && -z "$DOMAIN" ]]; then die "HTTPS (--email) butuh --domain."; fi
+if [[ -r /etc/os-release ]]; then
+  . /etc/os-release
+  [[ "${ID:-}" == "ubuntu" || "${ID_LIKE:-}" == *debian* ]] || warn "Skrip ini dibuat untuk Ubuntu, terdeteksi: ${PRETTY_NAME:-tidak diketahui}"
+fi
+
+# ---------- Uninstall ----------
+if [[ "$MODE" == "uninstall" ]]; then
+  info "Menghapus konfigurasi nginx dan file web ${APP}"
+  rm -f "$SITE_LINK" "$SITE_FILE"
+  rm -rf "$WEB_DIR"
+  if command -v nginx >/dev/null && nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
+  info "Selesai. Folder sumber (git clone) tidak dihapus."
+  exit 0
+fi
+
+# ---------- Lokasi sumber ----------
+SRC_DIR="/nonexistent"
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+RUN_USER="${SUDO_USER:-root}"
+
+git_auth() {
+  # Token GitHub (repo private) dikirim lewat header, tidak disimpan di .git/config.
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    local basic
+    basic="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+    git -c http.extraHeader="Authorization: Basic ${basic}" "$@"
+  else
+    git "$@"
+  fi
+}
+
+info "Memasang paket: nginx git rsync"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq nginx git rsync >/dev/null
+if [[ -n "$EMAIL" ]]; then
+  info "Memasang certbot untuk HTTPS"
+  apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+fi
+
+if [[ ! -f "$SRC_DIR/index.html" ]]; then
+  # Skrip dijalankan sendirian (mis. lewat curl): ambil sumber dari GitHub.
+  SRC_DIR="$CLONE_DIR"
+  if [[ ! -d "$SRC_DIR/.git" ]]; then
+    info "Mengunduh sumber dari $REPO_URL ke $SRC_DIR"
+    git_auth clone --depth 1 "$REPO_URL" "$SRC_DIR" ||
+      die "Gagal clone. Repo private? Jalankan dengan: sudo GITHUB_TOKEN=xxxx bash $0"
+  fi
+  RUN_USER="root"
+fi
+
+if [[ "$MODE" == "update" ]]; then
+  [[ -d "$SRC_DIR/.git" ]] || die "$SRC_DIR bukan folder git, tidak bisa update."
+  info "Mengambil versi terbaru (git pull) di $SRC_DIR"
+  if [[ "$RUN_USER" != "root" ]]; then
+    sudo -u "$RUN_USER" git -C "$SRC_DIR" pull --ff-only
+  else
+    git_auth -c safe.directory="$SRC_DIR" -C "$SRC_DIR" pull --ff-only
+  fi
+  # Pakai konfigurasi yang sudah ada bila opsi tidak diberikan ulang.
+  if [[ -f "$SITE_FILE" ]]; then
+    [[ -n "$DOMAIN" ]] || DOMAIN="$(awk '/server_name/ {gsub(";",""); print $2; exit}' "$SITE_FILE")"
+    [[ "$PORT" != "80" ]] || PORT="$(awk '/listen/ && !/ssl/ && !/\[::\]/ {gsub(";",""); print $2; exit}' "$SITE_FILE")"
+    if [[ "$DOMAIN" == "_" ]]; then DOMAIN=""; fi
+    if grep -q "managed by Certbot" "$SITE_FILE"; then KEEP_CERT=1; fi
+  fi
+fi
+[[ -f "$SRC_DIR/index.html" ]] || die "index.html tidak ditemukan di $SRC_DIR"
+
+# ---------- Salin file web ----------
+info "Menyalin aplikasi ke $WEB_DIR"
+mkdir -p "$WEB_DIR"
+rsync -a --delete \
+  --exclude '.git' --exclude '.github' --exclude '.claude' --exclude 'deploy' \
+  --exclude '*.md' --exclude '.gitignore' \
+  "$SRC_DIR/" "$WEB_DIR/"
+chown -R www-data:www-data "$WEB_DIR"
+find "$WEB_DIR" -type d -exec chmod 755 {} +
+find "$WEB_DIR" -type f -exec chmod 644 {} +
+
+# ---------- Konfigurasi nginx ----------
+if [[ "${KEEP_CERT:-0}" == "1" ]]; then
+  info "Konfigurasi HTTPS yang ada dipertahankan"
+else
+  SERVER_NAME="${DOMAIN:-_}"
+  info "Menulis konfigurasi nginx (server_name ${SERVER_NAME}, port ${PORT})"
+  cat > "$SITE_FILE" <<NGINX
+# Dibuat oleh deploy/install.sh (Konver Soal)
+server {
+    listen ${PORT};
+    listen [::]:${PORT};
+    server_name ${SERVER_NAME};
+
+    root ${WEB_DIR};
+    index index.html;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "same-origin" always;
+
+    gzip on;
+    gzip_types text/css application/javascript text/javascript;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+        add_header Cache-Control "no-cache";
+    }
+
+    location ~* \.(?:js|css)\$ {
+        expires 1h;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}
+NGINX
+  ln -sf "$SITE_FILE" "$SITE_LINK"
+
+  # Situs bawaan nginx bentrok dengan server_name "_" di port 80.
+  if [[ -z "$DOMAIN" && "$PORT" == "80" && -e /etc/nginx/sites-enabled/default ]]; then
+    warn "Menonaktifkan situs bawaan nginx (/etc/nginx/sites-enabled/default)"
+    rm -f /etc/nginx/sites-enabled/default
+  fi
+fi
+
+nginx -t >/dev/null 2>&1 || { nginx -t; die "Konfigurasi nginx tidak valid."; }
+systemctl enable --now nginx >/dev/null 2>&1 || true
+systemctl reload nginx
+
+# ---------- Firewall ----------
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+  info "Membuka port ${PORT} di ufw"
+  ufw allow "${PORT}/tcp" >/dev/null
+  if [[ -n "$EMAIL" ]]; then ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; fi
+fi
+
+# ---------- HTTPS ----------
+if [[ -n "$EMAIL" && "${KEEP_CERT:-0}" != "1" ]]; then
+  info "Meminta sertifikat HTTPS Let's Encrypt untuk $DOMAIN"
+  certbot --nginx -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --redirect ||
+    warn "Certbot gagal. Pastikan domain $DOMAIN sudah mengarah ke IP server ini dan port 80 terbuka."
+fi
+
+# ---------- Ringkasan ----------
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+PORT_SUFFIX=""
+if [[ "$PORT" != "80" ]]; then PORT_SUFFIX=":$PORT"; fi
+if [[ -n "$EMAIL" || "${KEEP_CERT:-0}" == "1" ]]; then URL="https://${DOMAIN}/"
+elif [[ -n "$DOMAIN" ]]; then URL="http://${DOMAIN}${PORT_SUFFIX}/"
+else URL="http://${IP:-IP-SERVER}${PORT_SUFFIX}/"
+fi
+echo
+info "Konver Soal terpasang."
+echo "    Buka      : ${URL}"
+echo "    File web  : ${WEB_DIR}"
+echo "    Sumber    : ${SRC_DIR}"
+echo "    Update    : sudo bash ${SRC_DIR}/deploy/install.sh --update"

@@ -23,6 +23,57 @@ Nomor soal dan huruf opsi memakai numbering Word asli; opsi dimulai ulang dari "
 
 File diproses sepenuhnya di browser, tidak diunggah ke server mana pun.
 
+## Instalasi di Ubuntu Server
+
+Skrip `deploy/install.sh` memasang nginx dan menayangkan aplikasi. Skrip ini sudah dicek sintaksnya, tetapi belum pernah dijalankan di server Ubuntu sungguhan.
+
+**1. Ambil kode** (repo private, jadi butuh login GitHub):
+
+```bash
+sudo apt-get update && sudo apt-get install -y git
+git clone https://github.com/ichalsmiler/konver-soal.git
+cd konver-soal
+```
+
+Saat diminta *Username* isi `ichalsmiler`, dan *Password* isi **Personal Access Token**, bukan password GitHub.
+Buat token di GitHub → Settings → Developer settings → Personal access tokens → *Fine-grained tokens*, lalu beri akses *Contents: Read-only* ke repo `konver-soal`.
+
+**2. Pasang** (pilih salah satu):
+
+```bash
+sudo bash deploy/install.sh                      # http://IP-SERVER/
+sudo bash deploy/install.sh --port 8080          # http://IP-SERVER:8080/ (bila port 80 sudah dipakai)
+sudo bash deploy/install.sh --domain soal.sekolah.sch.id
+sudo bash deploy/install.sh --domain soal.sekolah.sch.id --email admin@sekolah.sch.id   # + HTTPS gratis
+```
+
+Untuk HTTPS, domain harus sudah diarahkan (DNS A record) ke IP server dan port 80/443 terbuka.
+
+**Update ke versi terbaru:**
+
+```bash
+sudo bash deploy/install.sh --update
+```
+
+Perintah ini menjalankan `git pull`, lalu memasang ulang dengan pengaturan port/domain/HTTPS yang lama.
+
+**Hapus:** `sudo bash deploy/install.sh --uninstall`
+
+Yang dilakukan skrip:
+
+- memasang `nginx`, `git`, dan `rsync` (plus `certbot` bila HTTPS);
+- menyalin aplikasi ke `/var/www/konver-soal`;
+- membuat konfigurasi `/etc/nginx/sites-available/konver-soal`;
+- membuka port di `ufw` bila firewall aktif.
+
+**Alternatif tanpa clone manual:** skrip bisa mengunduh sendiri ke `/opt/konver-soal` memakai token:
+
+```bash
+curl -fsSL -H "Authorization: token TOKEN_ANDA" \
+  https://raw.githubusercontent.com/ichalsmiler/konver-soal/main/deploy/install.sh -o install.sh
+sudo GITHUB_TOKEN=TOKEN_ANDA bash install.sh
+```
+
 ## Yang dirapikan otomatis
 
 - Nomor soal `1.`, `1)`, `2.Teks`, `Soal 3.`, atau numbering Word, lalu dinomori ulang berurutan.
@@ -47,3 +98,4 @@ File diproses sepenuhnya di browser, tidak diunggah ke server mana pun.
 - `js/app.js`: logika antarmuka dan editor
 - `lib/jszip.min.js`: JSZip 3.10.1 (MIT)
 - `contoh-berantakan.docx`: contoh file soal berantakan untuk dicoba
+- `deploy/install.sh`: installer Ubuntu Server (nginx)
