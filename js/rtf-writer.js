@@ -90,6 +90,39 @@
       '{\\levelnumbers\\\'01;}\\fi-360\\li' + indent + '\\lin' + indent + ' }{\\listname ;}\\listid' + id + '}';
   }
 
+  // Tabel di dalam soal: menjorok sejajar teks soal, bergaris, lebar kolom mengikuti asli.
+  const TABLE_LEFT = 360;
+  const TABLE_MAX_W = 9026 - TABLE_LEFT; // lebar teks A4 dengan margin 2,54 cm
+  const BORDER = '\\brdrs\\brdrw10';
+
+  function table(t, base) {
+    const cols = Math.max(1, ...t.rows.map(r => r.reduce((n, c) => n + (c.span || 1), 0)));
+    let widths = (t.widths || []).slice(0, cols);
+    if (widths.length < cols || widths.some(w => !w)) widths = Array(cols).fill(Math.floor(TABLE_MAX_W / cols));
+    const total = widths.reduce((a, b) => a + b, 0);
+    if (total > TABLE_MAX_W) widths = widths.map(w => Math.floor(w * TABLE_MAX_W / total));
+
+    const out = [];
+    for (const row of t.rows) {
+      let def = '\\trowd\\trgaph108\\trleft' + TABLE_LEFT +
+        '\\trbrdrt' + BORDER + '\\trbrdrl' + BORDER + '\\trbrdrb' + BORDER + '\\trbrdrr' + BORDER +
+        '\\trbrdrh' + BORDER + '\\trbrdrv' + BORDER;
+      let x = TABLE_LEFT, col = 0, content = '';
+      for (const c of row) {
+        const span = c.span || 1;
+        for (let s = 0; s < span; s++) x += widths[Math.min(col++, widths.length - 1)];
+        def += (c.vm === 'restart' ? '\\clvmgf' : c.vm === 'cont' ? '\\clvmrg' : '') +
+          '\\clvertalc\\clbrdrt' + BORDER + '\\clbrdrl' + BORDER + '\\clbrdrb' + BORDER + '\\clbrdrr' + BORDER +
+          '\\cellx' + x;
+        const paras = c.vm === 'cont' || !c.paras.length ? [[]] : c.paras;
+        content += paras.map((p, i) => '\\pard\\plain\\intbl\\ql\\sa0\\sl240\\slmult1' + base + ' ' + runs(p) +
+          (i < paras.length - 1 ? '\\par' : '\\cell')).join('\n') + '\n';
+      }
+      out.push(def + '\n' + content + '\\row');
+    }
+    return out.join('\n') + '\n\\pard\\plain' + base;
+  }
+
   function build(questions, cfg) {
     cfg = Object.assign({
       mcTitle: 'Multiple choice', essayTitle: 'Essay', font: 'Times New Roman',
@@ -115,6 +148,11 @@
 
     const stemParas = (q, ls, n) => {
       q.stem.forEach((p, k) => {
+        if (p.table) {
+          if (k === 0) listPara(ls, n + '.', 360, '');
+          body.push(table(p.table, base));
+          return;
+        }
         if (k === 0) { listPara(ls, n + '.', 360, runs(p)); return; }
         const first = p.find(s => !s.img);
         const m = first && p[0] === first ? RE_SUB.exec(first.t) : null;

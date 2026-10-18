@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { Segs, validate, letter } = ExamParser;
+  const { Segs, validate, letter, isTable } = ExamParser;
   const $ = s => document.querySelector(s);
   const state = { name: '', questions: [], ignored: [], filter: 'all' };
   let uid = 0;
@@ -112,6 +112,7 @@
         const id = n.getAttribute('data-img');
         if (id && imgs.has(id)) { cur().push({ img: imgs.get(id) }); continue; }
         if (tag === 'BR') { paras.push([]); continue; }
+        if (tag === 'TABLE') { brk(); paras.push(tableFromHtml(n)); paras.push([]); continue; }
         const g = Object.assign({}, f);
         if (tag === 'B' || tag === 'STRONG' || /bold|[6-9]00/.test(n.style.fontWeight)) g.b = true;
         if (tag === 'I' || tag === 'EM' || n.style.fontStyle === 'italic') g.i = true;
@@ -124,7 +125,61 @@
         if (block) brk();
       }
     })(rootEl, {});
-    return paras.map(p => Segs.tidy(p)).filter(p => !Segs.isEmpty(p));
+    return paras
+      .map(p => (isTable(p) ? p : Segs.tidy(p)))
+      .filter(p => isTable(p) || !Segs.isEmpty(p));
+  }
+
+  // ---------- Tabel <-> HTML ----------
+  function tableHtml(t) {
+    const cols = t.rows.map(row => { let c = 0; return row.map(cell => { const s = c; c += cell.span || 1; return s; }); });
+    let h = '<table class="tbl" data-widths="' + escHtml(JSON.stringify(t.widths || [])) + '"><tbody>';
+    t.rows.forEach((row, r) => {
+      h += '<tr>';
+      row.forEach((cell, i) => {
+        if (cell.vm === 'cont') return;
+        let rs = 1;
+        if (cell.vm === 'restart') {
+          for (let k = r + 1; k < t.rows.length; k++) {
+            const j = cols[k].indexOf(cols[r][i]);
+            if (j < 0 || t.rows[k][j].vm !== 'cont') break;
+            rs++;
+          }
+        }
+        h += '<td' + (cell.span > 1 ? ' colspan="' + cell.span + '"' : '') + (rs > 1 ? ' rowspan="' + rs + '"' : '') + '>' +
+          (cell.paras.length ? cell.paras.map(p => '<div>' + (segsToHtml(p) || '<br>') + '</div>').join('') : '<br>') + '</td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  function tableFromHtml(el) {
+    let widths = [];
+    try { widths = JSON.parse(el.getAttribute('data-widths') || '[]'); } catch (e) { widths = []; }
+    const rows = [];
+    const pending = [], pendingSpan = [];
+    for (const tr of Array.from(el.rows)) {
+      const row = [];
+      const cells = Array.from(tr.cells);
+      let col = 0, ci = 0;
+      for (;;) {
+        if (pending[col] > 0) {
+          row.push({ paras: [], span: pendingSpan[col], vm: 'cont' });
+          pending[col]--;
+          col += pendingSpan[col];
+          continue;
+        }
+        if (ci >= cells.length) break;
+        const td = cells[ci++];
+        const span = td.colSpan || 1, rs = td.rowSpan || 1;
+        row.push({ paras: htmlToParas(td).filter(p => !isTable(p)), span, vm: rs > 1 ? 'restart' : null });
+        if (rs > 1) { pending[col] = rs - 1; pendingSpan[col] = span; }
+        col += span;
+      }
+      if (row.length) rows.push(row);
+    }
+    return { table: { rows, widths } };
   }
 
   // ---------- Render ----------
@@ -160,7 +215,9 @@
     el.className = 'q';
     el.dataset.id = q.id;
     el.id = 'q' + q.id;
-    const stemHtml = (q.stem.length ? q.stem : [[]]).map(p => '<div>' + (segsToHtml(p) || '<br>') + '</div>').join('');
+    const stemItems = q.stem.length ? q.stem : [[]];
+    let stemHtml = stemItems.map(p => (isTable(p) ? tableHtml(p.table) : '<div>' + (segsToHtml(p) || '<br>') + '</div>')).join('');
+    if (isTable(stemItems[stemItems.length - 1])) stemHtml += '<div><br></div>'; // tempat kursor setelah tabel
     let body = '<div class="q-head">' +
       '<span class="q-num">' + n + '.</span>' +
       '<select class="q-type" data-act="type" aria-label="Jenis soal"><option value="mc"' + (q.type === 'mc' ? ' selected' : '') + '>Pilihan ganda</option><option value="essay"' + (q.type === 'essay' ? ' selected' : '') + '>Essay</option></select>' +
@@ -304,7 +361,7 @@
     const f = t.dataset.field;
     if (f === 'stem') q.stem = htmlToParas(t);
     else if (f === 'opt') {
-      const paras = htmlToParas(t);
+      const paras = htmlToParas(t).filter(p => !isTable(p));
       q.options[parseInt(t.dataset.i, 10)] = Segs.tidy(paras.reduce((a, p, k) => a.concat(k ? [{ t: ' ' }] : [], p), []));
     } else if (f === 'essay') q.answer = t.value;
     else return;

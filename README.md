@@ -87,6 +87,9 @@ Yang dilakukan skrip:
   opsi yang ditebalkan atau distabilo (tebalnya dihapus di hasil), atau tabel *Kunci Jawaban* di akhir dokumen.
 - Kop soal, petunjuk, dan catatan dibuang.
 - Gambar (PNG/JPEG/GIF/BMP/WMF/EMF), tebal, miring, garis bawah, subscript, dan superscript dipertahankan.
+- Tabel di dalam soal (mis. tabel data percobaan) tetap menjadi tabel di preview dan RTF, termasuk lebar kolom dan sel gabungan.
+- Tabel opsi (baris berlabel A–E) diubah menjadi opsi a–e, isi sel digabung dengan `;`.
+- Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
 - Bagian Essay/Uraian juga dikenali.
 
 ## Batasan

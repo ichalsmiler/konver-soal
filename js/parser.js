@@ -190,6 +190,66 @@
     return map;
   }
 
+  // ---------- Tabel ----------
+  const withLabel = l => (l.auto ? [{ t: l.auto.label + ' ' }].concat(l.segs) : l.segs);
+  const joinWith = (parts, sep) => parts.reduce((a, p, i) => a.concat(i ? [{ t: sep }] : [], p), []);
+
+  function cellParas(cell) {
+    const out = [];
+    for (const l of cell.lines) {
+      if (l.table) out.push(...flattenTable(l.table).map(withLabel));
+      else out.push(withLabel(l));
+    }
+    return out.map(p => Segs.tidy(p)).filter(p => !Segs.isEmpty(p));
+  }
+  const cellText = cell => cell.lines.map(l => Segs.text(l.segs)).join(' ').trim();
+
+  /** Tabel yang setiap barisnya diawali huruf opsi berurutan (A, B, C...) -> isi opsi. */
+  function optionRows(table, cur) {
+    const rows = table.rows;
+    if (rows.length < 2) return null;
+    const out = [];
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      if (row.length < 2) return null;
+      const m = /^\(?([A-Za-z])\s*[.)]?$/.exec(cellText(row[0]));
+      if (!m || m[1].toLowerCase() !== String.fromCharCode(97 + cur.options.length + r)) return null;
+      const parts = row.slice(1).map(c => joinWith(cellParas(c), ' ')).filter(p => !Segs.isEmpty(p));
+      out.push(joinWith(parts, '; '));
+    }
+    return out;
+  }
+
+  function stemTable(table) {
+    return {
+      widths: table.widths || [],
+      rows: table.rows.map(row => row.map(c => ({ paras: cellParas(c), span: c.span || 1, vm: c.vm || null }))),
+    };
+  }
+
+  /** Ratakan tabel jadi baris; sel berisi label pendek ("1", "a.") digabung ke sel sesudahnya. */
+  function flattenTable(table) {
+    const out = [];
+    for (const row of table.rows) {
+      const cells = row.filter(c => c.vm !== 'cont');
+      for (let i = 0; i < cells.length; i++) {
+        const c = cells[i];
+        const next = cells[i + 1];
+        const only = c.lines.length && !c.lines.some(l => l.table || Segs.hasImage(l.segs)) ? cellText(c) : null;
+        if (only && /^(\d{1,3}|[A-Za-z])[.)]?$/.test(only) && next && next.lines.length && !next.lines[0].table) {
+          const lbl = /[.)]$/.test(only) ? only : only + '.';
+          next.lines = next.lines.slice();
+          next.lines[0] = Object.assign({}, next.lines[0], { segs: [{ t: lbl + ' ' }].concat(next.lines[0].segs) });
+          continue;
+        }
+        out.push(...c.lines);
+      }
+    }
+    return out;
+  }
+
+  const isTable = p => !!(p && p.table);
+
   // ---------- Parser utama ----------
   function parse(lines, options) {
     const cfg = Object.assign({ optCount: 5 }, options);
@@ -213,7 +273,27 @@
       if (key && !qListKey) qListKey = key;
     };
 
-    for (const ln of lines) {
+    const queue = lines.slice();
+    while (queue.length) {
+      const ln = queue.shift();
+
+      // Tabel: opsi (baris A–E), bagian dari soal, atau tata letak yang diratakan.
+      if (ln.table) {
+        const t = ln.table;
+        if (mode === 'q' && cur && !cur.flags.answerSeen) {
+          if (cur.type === 'mc' && cur.options.length === 0) {
+            const opts = optionRows(t, cur);
+            if (opts) { for (const s of opts) cur.options.push({ segs: s }); continue; }
+          }
+          if (cur.type === 'essay' || cur.options.length === 0) {
+            cur.stem.push({ table: stemTable(t) });
+            continue;
+          }
+        }
+        queue.unshift(...flattenTable(t));
+        continue;
+      }
+
       const segs = ln.segs || [];
       const raw = Segs.text(segs).replace(/ /g, ' ');
       const text = raw.trim();
@@ -233,7 +313,16 @@
         mode = 'stop'; ignored.push(text); continue;
       }
       const sec = !ln.auto || !DEC_FMTS.has(ln.auto.fmt) ? sectionOf(text) : null;
-      if (sec) { type = sec; cur = null; continue; }
+      if (sec) {
+        // "Soal" bernomor sebelum judul bagian pertama tanpa opsi/kunci = petunjuk pengerjaan.
+        if (questions.length && questions.every(q => !q.options.length && !q.flags.answerSeen)) {
+          for (const q of questions) for (const p of q.stem) if (!isTable(p)) ignored.push(Segs.text(p.segs).trim());
+          questions.length = 0;
+          expected = 1;
+          qListKey = null;
+        }
+        type = sec; cur = null; continue;
+      }
 
       // Kunci jawaban di bawah soal
       if (cur) {
@@ -325,7 +414,9 @@
       if (lastKey) while (i > 1 && q.stem[i - 1].auto && q.stem[i - 1].auto.key === lastKey) i--;
       let count = q.stem.length - i;
       if (!(lastKey && count >= 2 && count <= 8)) {
-        count = q.answer ? Math.min(cfg.optCount, q.stem.length - 1) : 0;
+        let tail = 0; // hanya paragraf di akhir (bukan tabel) yang boleh jadi opsi
+        while (tail < q.stem.length - 1 && !isTable(q.stem[q.stem.length - 1 - tail])) tail++;
+        count = q.answer ? Math.min(cfg.optCount, tail) : 0;
         i = q.stem.length - count;
       }
       if (count >= 2) {
@@ -363,7 +454,9 @@
     }
 
     const clean = s => Segs.tidy(s.map(x => (x.mark ? Object.assign({}, x, { mark: false }) : x)));
-    const stem = q.stem.map(p => clean(p.segs)).filter(s => !Segs.isEmpty(s));
+    const stem = q.stem
+      .map(p => (isTable(p) ? p : clean(p.segs)))
+      .filter(s => isTable(s) || !Segs.isEmpty(s));
     const options = opts.map(o => clean(o.segs));
 
     if (!stem.length && !options.length) return null;
@@ -386,7 +479,7 @@
   function validate(q, cfg) {
     const optCount = (cfg && cfg.optCount) || 5;
     const issues = [];
-    if (!q.stem.length || q.stem.every(Segs.isEmpty)) issues.push('Teks soal kosong');
+    if (!q.stem.length || q.stem.every(p => !isTable(p) && Segs.isEmpty(p))) issues.push('Teks soal kosong');
     if (q.type === 'mc') {
       if (!q.options.length) issues.push('Tidak ada opsi jawaban');
       else if (q.options.length !== optCount) issues.push('Jumlah opsi ' + q.options.length + ' (standar ' + optCount + ')');
@@ -406,7 +499,7 @@
     return issues;
   }
 
-  const api = { parse, validate, Segs, letter };
+  const api = { parse, validate, Segs, letter, isTable };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ExamParser = api;
 })(this);

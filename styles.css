@@ -172,6 +172,9 @@ details summary { cursor: pointer; font-size: 14px; }
 .edit img { max-width: 100%; height: auto; vertical-align: middle; }
 .edit .ph { display: inline-block; padding: 6px 10px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 4px; font: 12px system-ui, sans-serif; color: var(--muted); }
 .stem > div { min-height: 1.5em; }
+.tbl { border-collapse: collapse; margin: 6px 0; max-width: 100%; font-size: 15px; }
+.tbl td { border: 1px solid var(--muted); padding: 3px 8px; vertical-align: middle; min-width: 2.5em; }
+.stem { overflow-x: auto; }
 .opts { list-style: none; margin: 6px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 2px; }
 .opt { display: flex; align-items: flex-start; gap: 6px; }
 .opt .edit { flex: 1; padding-top: 2px; padding-bottom: 2px; }

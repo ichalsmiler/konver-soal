@@ -322,30 +322,38 @@
       }
     }
 
+    // Tabel dikirim utuh sebagai satu "baris" { table }; parser yang menentukan
+    // apakah tabel ini isi soal, tabel opsi, atau tata letak yang perlu diratakan.
     function table(tbl, outLines) {
+      const widths = kids(kid(tbl, 'tblGrid'), 'gridCol').map(g => parseInt(attr(g, 'w') || '0', 10) || 0);
+      const rows = [];
       for (const tr of kids(tbl, 'tr')) {
-        const cells = kids(tr, 'tc').map(tc => { const l = []; block(tc, l); return l; });
-        // Sel berisi label pendek ("1", "a.") digabung ke sel sesudahnya.
-        for (let i = 0; i < cells.length; i++) {
-          const c = cells[i];
-          const nonEmpty = c.filter(l => l.segs.some(s => s.img || (s.t && s.t.trim())));
-          const only = nonEmpty.length === 1 && !nonEmpty[0].segs.some(s => s.img)
-            ? nonEmpty[0].segs.map(s => s.t).join('').trim() : null;
-          const next = cells[i + 1];
-          if (only != null && /^(\d{1,3}|[A-Za-z])[.)]?$/.test(only) && next && next.length) {
-            const lbl = /[.)]$/.test(only) ? only : only + '.';
-            next[0] = Object.assign({}, next[0], { segs: [{ t: lbl + ' ' }].concat(next[0].segs) });
-            continue;
-          }
-          outLines.push(...c);
+        const row = [];
+        for (const tc of kids(tr, 'tc')) {
+          const tcPr = kid(tc, 'tcPr');
+          const span = parseInt(attr(kid(tcPr, 'gridSpan'), 'val') || '1', 10) || 1;
+          const vmEl = kid(tcPr, 'vMerge');
+          const vm = vmEl ? (attr(vmEl, 'val') === 'restart' ? 'restart' : 'cont') : null;
+          const lines = [];
+          block(tc, lines);
+          row.push({ lines, span, vm });
         }
+        if (row.length) rows.push(row);
+      }
+      if (rows.length) outLines.push({ segs: [], auto: null, table: { rows, widths } });
+    }
+
+    function dropMissingImages(lines) {
+      for (const l of lines) {
+        l.segs = l.segs.filter(s => !('img' in s) || s.img);
+        if (l.table) for (const r of l.table.rows) for (const c of r) dropMissingImages(c.lines);
       }
     }
 
     const lines = [];
     block(findDeep(doc, 'body'), lines);
     await Promise.all(pending);
-    for (const l of lines) l.segs = l.segs.filter(s => !('img' in s) || s.img);
+    dropMissingImages(lines);
     return lines;
   }
 
