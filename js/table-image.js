@@ -295,5 +295,5 @@
     return btoa(bin);
   }
 
-  root.TableImage = { render };
+  root.TableImage = { render, encodeGray4 };
 })(this);

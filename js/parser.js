@@ -101,7 +101,7 @@
   function sectionOf(text) {
     if (text.length > 45) return null;
     const t = text.replace(/^(?:[A-Z]|[IVX]+)[.)]\s*/, '').replace(/[:.]\s*$/, '').trim();
-    if (/^(?:soal\s+)?(?:multiple\s*choice|pilihan\s+ganda|pilgan|pg)$/i.test(t)) return 'mc';
+    if (/^(?:soal\s+)?(?:multiple\s*choice|pilihan\s+ganda|pilgan|pg)$/i.test(t) || /^soal(?:-soal)?$/i.test(t)) return 'mc';
     if (/^(?:soal\s+)?(?:essay|esai|esay|uraian|isian(?:\s+singkat)?)$/i.test(t)) return 'essay';
     return null;
   }
@@ -114,6 +114,8 @@
     if (ln.auto && DEC_FMTS.has(ln.auto.fmt)) {
       return { num: ln.auto.n, segs, key: ln.auto.key };
     }
+    // Baris bernomor huruf otomatis (a., b., ...) adalah opsi, walau teksnya diawali angka ("1. Dekat ...").
+    if (ln.auto && LETTER_FMTS.has(ln.auto.fmt)) return null;
     const m = RE_QNUM.exec(text);
     if (!m) return null;
     const off = leadOffset(raw) + m[0].length;
@@ -204,8 +206,25 @@
   }
   const cellText = cell => cell.lines.map(l => Segs.text(l.segs)).join(' ').trim();
 
+  const isLetterCell = (cell, i, cur) => {
+    const m = /^\(?([A-Za-z])\s*[.)]?$/.exec(cellText(cell));
+    return !!m && m[1].toLowerCase() === String.fromCharCode(97 + cur.options.length + i);
+  };
+
+  /** Tabel opsi menyamping: baris pertama A | B | C ..., baris berikutnya isi tiap opsi per kolom. */
+  function optionColumns(table, cur) {
+    const rows = table.rows;
+    if (rows.length < 2 || rows[0].length < 2 || !rows[0].every((c, i) => isLetterCell(c, i, cur))) return null;
+    return rows[0].map((_, col) => {
+      const parts = rows.slice(1).map(r => (r[col] ? joinWith(cellParas(r[col]), ' ') : [])).filter(p => !Segs.isEmpty(p));
+      return joinWith(parts, ' ');
+    });
+  }
+
   /** Tabel yang setiap barisnya diawali huruf opsi berurutan (A, B, C...) -> isi opsi. */
   function optionRows(table, cur) {
+    const byCol = optionColumns(table, cur);
+    if (byCol) return byCol;
     const rows = table.rows;
     if (rows.length < 2) return null;
     const out = [];
@@ -300,6 +319,8 @@
       const label = ln.auto ? ln.auto.label : '';
       if (!text) continue;
       if (ln.math && cur) cur.flags.math = true;
+      if (ln.drawing && cur) cur.flags.drawing = true;
+      if (ln.legacy && cur) cur.flags.legacy = true;
       if (RE_ARABIC.test(text) && cur) cur.flags.arabic = true;
 
       if (mode === 'key') { keyParts.push((label ? label + ' ' : '') + text); continue; }
@@ -347,7 +368,9 @@
         }
         const sameList = q.key && q.key === qListKey;
         const startNew = !cur || cur.options.length >= 2 || cur.flags.answerSeen ||
-          (q.num === expected && (sameList || RE_STEM_END.test(restText) || cur.type === 'essay'));
+          (q.num === expected && (sameList || RE_STEM_END.test(restText) || cur.type === 'essay')) ||
+          // penomoran mulai lagi dari 1 setelah daftar bernomor (mis. petunjuk) = soal pertama
+          (q.num === 1 && expected > 2 && !cur.options.length && RE_STEM_END.test(restText));
         if (startNew) { newQ(q.num, q.segs, q.key); continue; }
       }
 
@@ -463,6 +486,8 @@
     if (q.flags.badAnswer != null && q.answer == null) {
       notes.push('Baris kunci tidak dikenali' + (q.flags.badAnswer ? ': "' + q.flags.badAnswer + '"' : ''));
     }
+    if (q.flags.drawing) notes.push('Ilustrasi shape Word diubah menjadi gambar — mohon dicek');
+    if (q.flags.legacy) notes.push('Ada shape Word lama (VML) yang tidak ikut terbaca — ganti dengan gambar');
     if (q.flags.math) notes.push('Ada persamaan Word, diubah jadi teks biasa — sebaiknya pakai gambar');
     if (q.flags.arabic) notes.push('Ada tulisan Arab — sesuai ketentuan sebaiknya pakai gambar');
     return {

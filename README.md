@@ -90,7 +90,10 @@ Yang dilakukan skrip:
 - Tabel di dalam soal (mis. tabel data percobaan) tetap bisa diedit di preview, lalu saat ekspor diubah menjadi
   gambar PNG yang ringkas (grayscale, ±10–30 KB per tabel) namun tetap tajam dan terbaca. Bisa dimatikan
   lewat pengaturan "Tabel dalam soal dijadikan gambar" agar diekspor sebagai tabel Word biasa.
-- Tabel opsi (baris berlabel A–E) diubah menjadi opsi a–e, isi sel digabung dengan `;`.
+- Ilustrasi yang dibuat dari shape Word (kotak, garis/panah, kotak teks, grup, kanvas) beserta label teks
+  di sekitarnya digambar ulang menjadi satu gambar PNG dengan ukuran sama seperti di Word.
+  Shape lama format VML belum didukung dan akan ditandai.
+- Tabel opsi (baris berlabel A–E, atau menyamping dengan A–E di baris atas) diubah menjadi opsi a–e.
 - Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
 - Bagian Essay/Uraian juga dikenali.
 
@@ -106,6 +109,7 @@ Yang dilakukan skrip:
 - `js/parser.js`: mendeteksi soal, opsi, dan kunci
 - `js/rtf-writer.js`: menulis RTF format ujian
 - `js/table-image.js`: mengubah tabel soal menjadi gambar PNG
+- `js/drawing-render.js`: menggambar ilustrasi shape Word menjadi PNG
 - `js/app.js`: logika antarmuka dan editor
 - `lib/jszip.min.js`: JSZip 3.10.1 (MIT)
 - `contoh-berantakan.docx`: contoh file soal berantakan untuk dicoba
