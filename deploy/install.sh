@@ -92,11 +92,11 @@ git_auth() {
 
 info "Memasang paket: nginx git rsync"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq nginx git rsync >/dev/null
+apt-get update -qq </dev/null
+apt-get install -y -qq nginx git rsync </dev/null >/dev/null
 if [[ -n "$EMAIL" ]]; then
   info "Memasang certbot untuk HTTPS"
-  apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+  apt-get install -y -qq certbot python3-certbot-nginx </dev/null >/dev/null
 fi
 
 if [[ ! -f "$SRC_DIR/index.html" ]]; then
@@ -104,7 +104,7 @@ if [[ ! -f "$SRC_DIR/index.html" ]]; then
   SRC_DIR="$CLONE_DIR"
   if [[ ! -d "$SRC_DIR/.git" ]]; then
     info "Mengunduh sumber dari $REPO_URL ke $SRC_DIR"
-    git_auth clone --depth 1 "$REPO_URL" "$SRC_DIR" ||
+    git_auth clone --depth 1 "$REPO_URL" "$SRC_DIR" </dev/null ||
       die "Gagal clone. Repo private? Jalankan dengan: sudo GITHUB_TOKEN=xxxx bash $0"
   fi
   RUN_USER="root"
@@ -113,6 +113,7 @@ fi
 if [[ "$MODE" == "update" ]]; then
   [[ -d "$SRC_DIR/.git" ]] || die "$SRC_DIR bukan folder git, tidak bisa update."
   info "Mengambil versi terbaru (git pull) di $SRC_DIR"
+  RUN_USER="$(stat -c %U "$SRC_DIR")"   # jalankan git sebagai pemilik folder
   if [[ "$RUN_USER" != "root" ]]; then
     sudo -u "$RUN_USER" git -C "$SRC_DIR" pull --ff-only
   else
@@ -199,7 +200,7 @@ fi
 # ---------- HTTPS ----------
 if [[ -n "$EMAIL" && "${KEEP_CERT:-0}" != "1" ]]; then
   info "Meminta sertifikat HTTPS Let's Encrypt untuk $DOMAIN"
-  certbot --nginx -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --redirect ||
+  certbot --nginx -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --redirect </dev/null ||
     warn "Certbot gagal. Pastikan domain $DOMAIN sudah mengarah ke IP server ini dan port 80 terbuka."
 fi
 

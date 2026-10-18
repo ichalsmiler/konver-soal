@@ -27,16 +27,29 @@ File diproses sepenuhnya di browser, tidak diunggah ke server mana pun.
 
 Skrip `deploy/install.sh` memasang nginx dan menayangkan aplikasi. Skrip ini sudah dicek sintaksnya, tetapi belum pernah dijalankan di server Ubuntu sungguhan.
 
-**1. Ambil kode** (repo private, jadi butuh login GitHub):
+### Cara cepat (satu perintah)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ichalsmiler/konver-soal/main/deploy/install.sh | sudo bash
+```
+
+Kode diunduh ke `/opt/konver-soal`, lalu aplikasi bisa dibuka di `http://IP-SERVER/`. Opsi ditambahkan setelah `-s --`, misalnya:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ichalsmiler/konver-soal/main/deploy/install.sh | sudo bash -s -- --port 8080
+```
+
+Update: `sudo bash /opt/konver-soal/deploy/install.sh --update`
+
+### Cara manual
+
+**1. Ambil kode:**
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/ichalsmiler/konver-soal.git
 cd konver-soal
 ```
-
-Saat diminta *Username* isi `ichalsmiler`, dan *Password* isi **Personal Access Token**, bukan password GitHub.
-Buat token di GitHub → Settings → Developer settings → Personal access tokens → *Fine-grained tokens*, lalu beri akses *Contents: Read-only* ke repo `konver-soal`.
 
 **2. Pasang** (pilih salah satu):
 
@@ -65,14 +78,6 @@ Yang dilakukan skrip:
 - menyalin aplikasi ke `/var/www/konver-soal`;
 - membuat konfigurasi `/etc/nginx/sites-available/konver-soal`;
 - membuka port di `ufw` bila firewall aktif.
-
-**Alternatif tanpa clone manual:** skrip bisa mengunduh sendiri ke `/opt/konver-soal` memakai token:
-
-```bash
-curl -fsSL -H "Authorization: token TOKEN_ANDA" \
-  https://raw.githubusercontent.com/ichalsmiler/konver-soal/main/deploy/install.sh -o install.sh
-sudo GITHUB_TOKEN=TOKEN_ANDA bash install.sh
-```
 
 ## Yang dirapikan otomatis
 
