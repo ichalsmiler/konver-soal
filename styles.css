@@ -175,6 +175,15 @@ details summary { cursor: pointer; font-size: 14px; }
 .tbl { border-collapse: collapse; margin: 6px 0; max-width: 100%; font-size: 15px; }
 .tbl td { border: 1px solid var(--muted); padding: 3px 8px; vertical-align: middle; min-width: 2.5em; }
 .stem { overflow-x: auto; }
+.img-dialog {
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; max-width: min(760px, calc(100vw - 32px));
+  background: var(--surface); color: var(--text); box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.img-dialog::backdrop { background: rgba(0,0,0,.4); }
+.img-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.img-dialog figure { margin: 10px 0 0; overflow-x: auto; }
+.img-dialog img { display: block; background: #fff; }
+.img-dialog figcaption { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .opts { list-style: none; margin: 6px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 2px; }
 .opt { display: flex; align-items: flex-start; gap: 6px; }
 .opt .edit { flex: 1; padding-top: 2px; padding-bottom: 2px; }

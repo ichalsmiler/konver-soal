@@ -72,6 +72,7 @@
           <select id="cfgSize"><option>11</option><option selected>12</option><option>14</option></select>
         </label>
         <label class="check"><input type="checkbox" id="cfgBlank" checked> Baris kosong antar soal</label>
+        <label class="check"><input type="checkbox" id="cfgTblImg" checked> Tabel dalam soal dijadikan gambar</label>
       </section>
 
       <section class="panel" id="issuePanel">
@@ -103,10 +104,20 @@
 
   <div class="toast" id="toast" hidden></div>
 
+  <dialog id="imgDialog" class="img-dialog">
+    <div class="img-dialog-head">
+      <strong>Tabel sebagai gambar</strong>
+      <button class="icon-btn" id="imgDialogClose" type="button" aria-label="Tutup">✕</button>
+    </div>
+    <p class="hint">Ukuran ini sama dengan tampilan di dokumen RTF (100%).</p>
+    <div id="imgDialogBody"></div>
+  </dialog>
+
   <script src="lib/jszip.min.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/docx-reader.js"></script>
   <script src="js/rtf-writer.js"></script>
+  <script src="js/table-image.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

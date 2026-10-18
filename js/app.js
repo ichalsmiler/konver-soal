@@ -12,7 +12,9 @@
     mcTitle: $('#cfgTitle').value.trim() || 'Multiple choice',
     fontSize: parseInt($('#cfgSize').value, 10),
     blankLine: $('#cfgBlank').checked,
+    tableImages: $('#cfgTblImg').checked,
   });
+  const hasTable = q => q.stem.some(isTable);
 
   const ICON = {
     up: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="m12 7-6 6 1.4 1.4 4.6-4.6 4.6 4.6L18 13l-6-6Z"/></svg>',
@@ -236,9 +238,10 @@
           '<button class="icon-btn del" data-act="rmopt" data-i="' + i + '" title="Hapus opsi">' + ICON.x + '</button></li>';
       }).join('') + '</ol>' +
         '<div class="q-foot"><button class="link-btn" data-act="addopt">+ Opsi</button>' +
-        '<span class="ans">ANS: <b>' + (q.answer || '—') + '</b></span></div>';
+        '<span class="ans">ANS: <b>' + (q.answer || '—') + '</b></span>' + tableImgBtn(q, settings) + '</div>';
     } else {
       body += '<label class="essay-ans">ANS: <input data-field="essay" value="' + escHtml(q.answer || '') + '" placeholder="Jawaban / pedoman penskoran (opsional)"></label>';
+      if (hasTable(q) && settings.tableImages) body += '<div class="q-foot">' + tableImgBtn(q, settings) + '</div>';
     }
     body += '<div class="badges"></div>';
     el.innerHTML = body;
@@ -246,12 +249,19 @@
     return el;
   }
 
+  function tableImgBtn(q, settings) {
+    return hasTable(q) && settings.tableImages
+      ? '<button class="link-btn" data-act="tblimg">Lihat tabel sebagai gambar</button>' : '';
+  }
+
   function paintBadges(el, q, settings) {
     const issues = validate(q, settings);
+    const notes = q.notes.slice();
+    if (hasTable(q) && settings.tableImages) notes.push('Tabel diekspor sebagai gambar');
     el.classList.toggle('has-issue', issues.length > 0);
     el.querySelector('.badges').innerHTML =
       issues.map(t => '<span class="badge warn">' + escHtml(t) + '</span>').join('') +
-      q.notes.map(t => '<span class="badge info">' + escHtml(t) + '</span>').join('');
+      notes.map(t => '<span class="badge info">' + escHtml(t) + '</span>').join('');
     const ans = el.querySelector('.ans b');
     if (ans) ans.textContent = q.answer || '—';
   }
@@ -309,6 +319,7 @@
       refreshMeta(q);
       return;
     }
+    if (act === 'tblimg') { showTableImages(q); return; }
     if (act === 'up' || act === 'down') {
       const j = idx + (act === 'up' ? -1 : 1);
       if (j < 0 || j >= list.length) return;
@@ -402,11 +413,35 @@
     document.execCommand('insertText', false, text);
   }
 
-  function exportRtf() {
+  // Ganti tabel di dalam soal dengan gambarnya (bila pengaturan aktif).
+  async function withTableImages(questions) {
+    return Promise.all(questions.map(async q => {
+      if (!hasTable(q)) return q;
+      const stem = await Promise.all(q.stem.map(async p => (isTable(p) ? [{ img: await TableImage.render(p.table) }] : p)));
+      return Object.assign({}, q, { stem });
+    }));
+  }
+
+  async function showTableImages(q) {
+    const body = $('#imgDialogBody');
+    body.innerHTML = '';
+    for (const p of q.stem.filter(isTable)) {
+      const img = await TableImage.render(p.table);
+      const kb = Math.round(img.b64.length * 3 / 4 / 1024);
+      const fig = document.createElement('figure');
+      fig.innerHTML = '<img alt="Tabel" style="width:' + Math.round(img.w / 15) + 'px" src="data:image/png;base64,' + img.b64 + '">' +
+        '<figcaption>' + Math.round(img.w / 567 * 10) / 10 + ' × ' + Math.round(img.h / 567 * 10) / 10 + ' cm · ' + kb + ' KB</figcaption>';
+      body.appendChild(fig);
+    }
+    $('#imgDialog').showModal();
+  }
+
+  async function exportRtf() {
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
     if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
-    const rtf = RtfWriter.build(state.questions, settings);
+    const questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
+    const rtf = RtfWriter.build(questions, settings);
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -507,5 +542,7 @@
     applyFilter();
   });
 
-  ['cfgOpt', 'cfgTitle'].forEach(id => $('#' + id).addEventListener('change', renderAll));
+  ['cfgOpt', 'cfgTitle', 'cfgTblImg'].forEach(id => $('#' + id).addEventListener('change', renderAll));
+  $('#imgDialogClose').addEventListener('click', () => $('#imgDialog').close());
+  $('#imgDialog').addEventListener('click', e => { if (e.target.id === 'imgDialog') e.target.close(); });
 })();

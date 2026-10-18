@@ -87,7 +87,9 @@ Yang dilakukan skrip:
   opsi yang ditebalkan atau distabilo (tebalnya dihapus di hasil), atau tabel *Kunci Jawaban* di akhir dokumen.
 - Kop soal, petunjuk, dan catatan dibuang.
 - Gambar (PNG/JPEG/GIF/BMP/WMF/EMF), tebal, miring, garis bawah, subscript, dan superscript dipertahankan.
-- Tabel di dalam soal (mis. tabel data percobaan) tetap menjadi tabel di preview dan RTF, termasuk lebar kolom dan sel gabungan.
+- Tabel di dalam soal (mis. tabel data percobaan) tetap bisa diedit di preview, lalu saat ekspor diubah menjadi
+  gambar PNG yang ringkas (grayscale, ±10–30 KB per tabel) namun tetap tajam dan terbaca. Bisa dimatikan
+  lewat pengaturan "Tabel dalam soal dijadikan gambar" agar diekspor sebagai tabel Word biasa.
 - Tabel opsi (baris berlabel A–E) diubah menjadi opsi a–e, isi sel digabung dengan `;`.
 - Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
 - Bagian Essay/Uraian juga dikenali.
@@ -103,6 +105,7 @@ Yang dilakukan skrip:
 - `js/docx-reader.js`: membaca .docx (numbering, gambar, tabel, format)
 - `js/parser.js`: mendeteksi soal, opsi, dan kunci
 - `js/rtf-writer.js`: menulis RTF format ujian
+- `js/table-image.js`: mengubah tabel soal menjadi gambar PNG
 - `js/app.js`: logika antarmuka dan editor
 - `lib/jszip.min.js`: JSZip 3.10.1 (MIT)
 - `contoh-berantakan.docx`: contoh file soal berantakan untuk dicoba

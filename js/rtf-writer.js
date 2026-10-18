@@ -160,7 +160,8 @@
           const rest = [Object.assign({}, first, { t: first.t.slice(m[0].length) })].concat(p.slice(1));
           para('\\fi-360\\li720\\lin720\\tx720', esc(m[1]) + '\\tab ' + runs(rest));
         } else {
-          para('\\li360\\lin360', runs(p));
+          const imageOnly = p.length > 0 && p.every(s => s.img || !/\S/.test(s.t));
+          para('\\li360\\lin360' + (imageOnly ? '\\sb60\\sa60' : ''), runs(p));
         }
       });
       if (!q.stem.length) listPara(ls, n + '.', 360, '');
