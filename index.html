@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Konverter Soal RTF</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M6 2h9l5 5v15a0 0 0 0 1 0 0H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6Zm0-6.8h4v1.6H8V8.6Z"/></svg>
+      <div>
+        <strong>Konverter Soal Ujian</strong>
+        <span class="sub">Word → RTF format ujian</span>
+      </div>
+    </div>
+    <div class="top-actions" id="topActions" hidden>
+      <span class="file-chip" id="fileChip"></span>
+      <button class="btn ghost" id="btnReset" type="button">Ganti file</button>
+      <button class="btn primary" id="btnExport" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM5 18h14v2H5v-2Z"/></svg>
+        Ekspor RTF
+      </button>
+    </div>
+  </header>
+
+  <main id="start" class="start">
+    <section class="hero">
+      <h1>Rapikan soal Word jadi format ujian siap impor</h1>
+      <p>Unggah file soal (.docx) dengan format apa pun. Aplikasi mendeteksi nomor soal, opsi a–e, dan kunci jawaban, lalu menyusunnya ulang seperti contoh: <code>Multiple choice</code> → soal bernomor → opsi a–e → <code>ANS: B</code>.</p>
+    </section>
+
+    <label class="drop" id="drop">
+      <input type="file" id="fileInput" accept=".docx,.txt" hidden>
+      <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path fill="currentColor" d="M12 3 7 8h3v6h4V8h3l-5-5ZM5 16v3h14v-3h2v5H3v-5h2Z"/></svg>
+      <strong>Pilih atau seret file .docx ke sini</strong>
+      <span>File diproses di browser ini saja, tidak diunggah ke server.</span>
+    </label>
+
+    <details class="paste">
+      <summary>Atau tempel teks soal</summary>
+      <textarea id="pasteText" rows="10" placeholder="1. Teks soal ....&#10;a. opsi&#10;b. opsi&#10;...&#10;Kunci: B"></textarea>
+      <button class="btn primary" id="btnPaste" type="button">Proses teks</button>
+    </details>
+
+    <section class="rules">
+      <h2>Yang dirapikan otomatis</h2>
+      <ul>
+        <li>Nomor soal <code>1.</code> <code>1)</code> <code>Soal 1.</code> atau numbering Word → dinomori ulang berurutan</li>
+        <li>Opsi <code>A.</code> <code>a)</code> <code>(a)</code>, opsi dalam satu baris, atau numbering huruf → <code>a.</code>–<code>e.</code></li>
+        <li>Kunci dari <code>Kunci: B</code>, <code>Jawaban: b</code>, huruf tunggal, tanda <code>*</code> pada opsi, opsi yang ditebalkan/distabilo, atau daftar <em>Kunci Jawaban</em> di akhir dokumen</li>
+        <li>Kop soal, petunjuk, dan catatan di luar soal dibuang; gambar & format tebal/miring dipertahankan</li>
+      </ul>
+    </section>
+    <p class="err" id="startError" hidden></p>
+  </main>
+
+  <div id="work" class="work" hidden>
+    <aside class="side">
+      <section class="panel stats" id="stats"></section>
+
+      <section class="panel">
+        <h3>Pengaturan ekspor</h3>
+        <label class="field">Judul bagian pilihan ganda
+          <input id="cfgTitle" value="Multiple choice">
+        </label>
+        <label class="field">Jumlah opsi standar
+          <select id="cfgOpt"><option>3</option><option>4</option><option selected>5</option></select>
+        </label>
+        <label class="field">Ukuran huruf
+          <select id="cfgSize"><option>11</option><option selected>12</option><option>14</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="cfgBlank" checked> Baris kosong antar soal</label>
+      </section>
+
+      <section class="panel" id="issuePanel">
+        <h3>Perlu dicek</h3>
+        <div id="issueList" class="issue-list"></div>
+      </section>
+
+      <section class="panel" id="ignoredPanel">
+        <details>
+          <summary>Teks di luar soal (<span id="ignoredCount">0</span>)</summary>
+          <p class="hint">Baris ini tidak dimasukkan ke hasil (kop, petunjuk, catatan).</p>
+          <ul id="ignoredList" class="ignored"></ul>
+        </details>
+      </section>
+    </aside>
+
+    <section class="list">
+      <div class="list-head">
+        <div class="seg" role="group" aria-label="Filter">
+          <button type="button" class="on" data-filter="all">Semua</button>
+          <button type="button" data-filter="issues">Perlu dicek</button>
+        </div>
+        <span class="hint">Klik teks untuk mengedit · pilih huruf di kiri opsi untuk kunci</span>
+      </div>
+      <div id="questions"></div>
+      <button class="btn add-q" id="btnAddQ" type="button">+ Tambah soal</button>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="lib/jszip.min.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/docx-reader.js"></script>
+  <script src="js/rtf-writer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
