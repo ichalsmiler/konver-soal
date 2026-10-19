@@ -16,6 +16,25 @@
 
   const MAX_IMG_W = 8500; // twips (~15 cm)
 
+  // Karakter khusus Windows-1252 (0x80–0x9F) -> kode byte, seperti yang ditulis Word (\'96 dst.).
+  const CP1252 = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
+    0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91,
+    0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98,
+    0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F,
+  };
+  // Cadangan yang masih terbaca untuk pembaca RTF tanpa Unicode (bukan "?").
+  const FALLBACK = {
+    0x2212: '-', 0x2010: '-', 0x2011: '-', 0x2012: '-', 0x2015: '-', 0x2264: '<=', 0x2265: '>=', 0x2260: '=/=',
+    0x2248: '~', 0x2261: '=', 0x221A: 'akar', 0x221E: 'tak hingga', 0x2192: '->', 0x2190: '<-', 0x2194: '<->',
+    0x21CC: '<=>', 0x21CB: '<=>', 0x21D2: '=>', 0x2032: "'", 0x2033: '"', 0x2219: '.', 0x22C5: '.', 0x2206: 'delta',
+    0x0394: 'Delta', 0x03B1: 'alfa', 0x03B2: 'beta', 0x03B3: 'gamma', 0x03B4: 'delta', 0x03B8: 'theta',
+    0x03BB: 'lambda', 0x03BC: 'mu', 0x03C0: 'pi', 0x03C1: 'rho', 0x03C3: 'sigma', 0x03C9: 'omega', 0x03A9: 'Ohm',
+    0x2070: '^0', 0x2074: '^4', 0x2075: '^5', 0x2076: '^6', 0x2077: '^7', 0x2078: '^8', 0x2079: '^9',
+    0x207A: '+', 0x207B: '-', 0x2080: '0', 0x2081: '1', 0x2082: '2', 0x2083: '3', 0x2084: '4', 0x2085: '5',
+    0x2086: '6', 0x2087: '7', 0x2088: '8', 0x2089: '9', 0x00A0: ' ', 0x2002: ' ', 0x2003: ' ', 0x2009: ' ', 0x200B: '',
+  };
+
   function esc(s) {
     let o = '';
     for (let i = 0; i < s.length; i++) {
@@ -26,7 +45,16 @@
       else if (ch === '\n') o += '\\line ';
       else if (c === 0xFFFC) continue;
       else if (c < 0x80) o += ch;
-      else o += '\\u' + (c > 32767 ? c - 65536 : c) + '?';
+      else if (c >= 0xA0 && c <= 0xFF) o += "\\'" + c.toString(16);          // Latin-1: ° ± × ÷ ² ³ ½ é ...
+      else if (CP1252[c]) o += "\\'" + CP1252[c].toString(16);                // – — … “ ” ‘ ’ • €
+      else {
+        // Unicode lain: \uN dengan cadangan yang terbaca (jumlah karakter cadangan via \ucN).
+        const fb = FALLBACK[c] != null ? FALLBACK[c] : '?';
+        // Spasi setelah \uN adalah pemisah kata kunci (bukan bagian cadangan), agar cadangan
+        // berupa angka/spasi tidak menempel ke kodenya.
+        const u = '\\u' + (c > 32767 ? c - 65536 : c) + ' ';
+        o += fb.length === 1 ? u + esc(fb) : '{\\uc' + fb.length + u + esc(fb) + '}';
+      }
     }
     return o;
   }
