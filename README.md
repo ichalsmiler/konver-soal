@@ -98,6 +98,9 @@ Yang dilakukan skrip:
   tajam di zoom 100%; contoh: file RTF 6,1 MB menjadi ±0,9 MB. Bisa dimatikan lewat pengaturan "Kompres foto besar".
 - Deretan gambar dengan label huruf/angka di atas atau bawahnya (mis. "A  B  C" di atas foto) digabung
   menjadi satu gambar agar label tetap sejajar dengan gambarnya.
+- Opsi yang berupa gambar daftar "A. … E." (hasil screenshot) dipotong otomatis menjadi 5 gambar opsi,
+  tanpa OCR sehingga simbol (√, pangkat, derajat) tetap persis. Bila soal dan opsi ada dalam satu gambar,
+  bagian soal dan opsinya dipisah. Bila bentuknya tidak meyakinkan, gambar dibiarkan utuh.
 - Tabel opsi (baris berlabel A–E, atau menyamping dengan A–E di baris atas) diubah menjadi opsi a–e.
 - Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
 - Bagian Essay/Uraian juga dikenali.

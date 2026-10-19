@@ -153,14 +153,19 @@
           body.push(table(p.table, base));
           return;
         }
-        if (k === 0) { listPara(ls, n + '.', 360, runs(p)); return; }
+        const imageOnly = p.length > 0 && p.some(s => s.img) && p.every(s => s.img || !/\S/.test(s.t));
+        if (k === 0) {
+          // Soal yang diawali gambar: nomor di baris sendiri, gambar di bawahnya (bukan di pojok bawah gambar).
+          if (imageOnly) { listPara(ls, n + '.', 360, ''); para('\\li360\\lin360\\sb60\\sa60', runs(p)); }
+          else listPara(ls, n + '.', 360, runs(p));
+          return;
+        }
         const first = p.find(s => !s.img);
         const m = first && p[0] === first ? RE_SUB.exec(first.t) : null;
         if (m) {
           const rest = [Object.assign({}, first, { t: first.t.slice(m[0].length) })].concat(p.slice(1));
           para('\\fi-360\\li720\\lin720\\tx720', esc(m[1]) + '\\tab ' + runs(rest));
         } else {
-          const imageOnly = p.length > 0 && p.every(s => s.img || !/\S/.test(s.t));
           para('\\li360\\lin360' + (imageOnly ? '\\sb60\\sa60' : ''), runs(p));
         }
       });

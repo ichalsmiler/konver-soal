@@ -92,7 +92,7 @@
   const RE_NOTE = /^(?:catatan|keterangan|note|ket)\s*:/i;
   const RE_QNUM = /^(?:soal\s*(?:no(?:mor)?\.?\s*)?)?(\d{1,3})\s*(?:[.)]|\s-\s|\t)\s*(?!\d)/i;
   const RE_OPT = /^\(?([A-Za-z])\s*[.)]\s*|^([A-Za-z])\t\s*/;
-  const RE_ANS = /^(ans(?:wer)?|kunci(?:\s+jawaban)?|jawaban(?:\s+(?:yang\s+)?benar)?|jawab|jwb|key)\b\s*([:=\-]?)\s*(.*)$/i;
+  const RE_ANS = /^(ans(?:wer)?|kunci(?:\s+jawaban)?|jawaban(?:\s+(?:yang\s+)?benar)?|jawab|jwb|key)\b\s*([:=.\-]?)\s*(.*)$/i;
   const RE_STEM_END = /(\.{3,}|…)\s*[?.]?\s*$/;
   const RE_ANS_MARK_TAIL = /\s*(?:\*+|\((?:benar|kunci|jawaban|v)\)|[✓✔√])\s*$/i;
   const RE_ANS_MARK_HEAD = /^\s*(?:\*+|[✓✔√])\s*/;
@@ -317,7 +317,16 @@
       const raw = Segs.text(segs).replace(/ /g, ' ');
       const text = raw.trim();
       const label = ln.auto ? ln.auto.label : '';
-      if (!text) continue;
+      if (!text) {
+        // Nomor soal otomatis tanpa teks: isi soalnya (mis. gambar) ada di paragraf berikutnya.
+        if (mode === 'q' && ln.auto && DEC_FMTS.has(ln.auto.fmt)) {
+          const sameList = ln.auto.key === qListKey;
+          if (!cur || cur.options.length >= 2 || cur.flags.answerSeen || (ln.auto.n === expected && sameList)) {
+            newQ(ln.auto.n, null, ln.auto.key);
+          }
+        }
+        continue;
+      }
       if (ln.math && cur) cur.flags.math = true;
       if (ln.drawing && cur) cur.flags.drawing = true;
       if (ln.pictures && cur) cur.flags.pictures = true;
@@ -414,6 +423,19 @@
 
     const key = parseKey(keyParts);
     const result = questions.map((q, i) => finalize(q, i, key, cfg)).filter(Boolean);
+    // Daftar bernomor di akhir dokumen yang mulai lagi dari 1 dan tanpa kunci = catatan, bukan soal.
+    for (let j = result.length - 1; j > 0; j--) {
+      if (result[j].srcNum !== 1) continue;
+      const tail = result.slice(j);
+      if (result[j - 1].answer && tail.every(q => q.type === 'mc' && !q.answer)) {
+        for (const q of tail) {
+          for (const p of q.stem) if (!isTable(p)) ignored.push(Segs.text(p).trim());
+          for (const o of q.options) ignored.push(Segs.text(o).trim());
+        }
+        result.length = j;
+      }
+      break;
+    }
     const counter = { mc: 0, essay: 0 };
     for (const q of result) {
       const n = ++counter[q.type];

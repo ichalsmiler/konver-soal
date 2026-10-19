@@ -426,6 +426,7 @@
       if (!holder || !gd || !DML_SHAPES.test(attr(gd, 'uri') || '')) return null;
       const ext = kid(holder, 'extent');
       const cx = num(ext, 'cx', 0), cy = num(ext, 'cy', 0);
+      if (Math.max(cx, cy) < 16 * 12700) return { tiny: true }; // garis/titik kecil (< 16 pt), bukan ilustrasi
       const pos = name => {
         const p = kid(holder, name);
         if (!p) return null;
@@ -468,6 +469,7 @@
           }
           case 'drawing': {
             const scene = sceneOf(c);
+            if (scene && scene.tiny) break;
             if (scene) {
               // Shape/grup Word: mengambang -> digambar bersama paragraf sekitarnya; inline -> gambar sendiri
               if (scene.anchor && ctx.floats) ctx.floats.push(scene);
@@ -659,8 +661,15 @@
         }
         let img = null;
         try { img = await DrawingRender.renderBlock({ page, paras }); } catch (err) { console.error(err); }
-        if (!blk.anchorKind) out.push(...entries[blk.anchor].lines);
-        if (img) out.push({ segs: [{ img }], auto: null, drawing: !blk.pictures, pictures: !!blk.pictures });
+        const anchorLines = entries[blk.anchor].lines;
+        const optionAnchor = !blk.anchorKind && anchorLines[0] && anchorLines[0].auto && /Letter$/.test(anchorLines[0].auto.fmt);
+        if (!blk.anchorKind) out.push(...anchorLines);
+        if (img && optionAnchor) {
+          // Shape yang menempel di baris opsi menjadi bagian dari opsi itu.
+          const last = anchorLines[anchorLines.length - 1];
+          last.segs = last.segs.concat([{ t: ' ' }, { img }]);
+          last.drawing = true;
+        } else if (img) out.push({ segs: [{ img }], auto: null, drawing: !blk.pictures, pictures: !!blk.pictures });
         i = blk.end;
         b++;
       }

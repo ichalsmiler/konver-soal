@@ -40,19 +40,38 @@
       else if (ext === 'doc') throw new Error('File .doc (Word 97–2003) belum didukung. Buka file di Word, lalu Simpan Sebagai → Dokumen Word (.docx).');
       else if (ext === 'rtf') throw new Error('Untuk file .rtf, buka di Word lalu Simpan Sebagai .docx, kemudian unggah lagi.');
       else throw new Error('Format file tidak dikenali. Gunakan .docx.');
-      processLines(lines, file.name);
+      await processLines(lines, file.name);
     } catch (e) {
       console.error(e);
       showError(e.message || 'Gagal membaca file.');
     }
   }
 
-  function processLines(lines, name) {
+  /** Soal PG tanpa opsi yang diakhiri satu gambar daftar opsi (A. … E.) -> gambar dipotong per opsi. */
+  async function splitOptionImages(questions, optCount) {
+    for (const q of questions) {
+      if (q.type !== 'mc' || q.options.length || !q.stem.length) continue;
+      const last = q.stem[q.stem.length - 1];
+      if (isTable(last)) continue;
+      const imgs = last.filter(s => s.img);
+      if (imgs.length !== 1 || last.some(s => !s.img && /\S/.test(s.t))) continue;
+      let res = null;
+      try { res = await OptionSplit.split(imgs[0].img, optCount); } catch (e) { console.error(e); }
+      if (!res) continue;
+      q.stem.pop();
+      if (res.stem) q.stem.push([{ img: res.stem }]);
+      q.options = res.options.map(img => [{ img }]);
+      q.notes.push(res.stem ? 'Soal & opsi dipisah dari satu gambar — mohon dicek' : 'Opsi dipotong dari gambar daftar opsi — mohon dicek');
+    }
+  }
+
+  async function processLines(lines, name) {
     const res = ExamParser.parse(lines, { optCount: cfg().optCount });
     if (!res.questions.length) {
       showError('Tidak ada soal yang terdeteksi. Pastikan setiap soal diawali nomor (mis. "1.") dan opsi diawali huruf (a., b., ...).');
       return;
     }
+    await splitOptionImages(res.questions, cfg().optCount);
     state.questions = res.questions.map(q => Object.assign({ id: ++uid }, q));
     state.ignored = res.ignored;
     state.name = name;
