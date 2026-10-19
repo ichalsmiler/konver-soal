@@ -33,7 +33,7 @@ KIRIM_ENV_DIR="/etc/${APP}"
 KIRIM_ENV="${KIRIM_ENV_DIR}/kirim.env"
 KIRIM_SERVICE="${APP}-kirim"
 KIRIM_PORT="3091"
-MAIL_TO="soal@sman2makassar.sch.id"
+MAIL_TO="${MAIL_TO:-terimasoal@sman2makassar.sch.id}"
 API_SNIPPET="/etc/nginx/snippets/${APP}-api.conf"
 
 c_ok=$'\e[32m'; c_warn=$'\e[33m'; c_err=$'\e[31m'; c_off=$'\e[0m'
@@ -190,10 +190,12 @@ set_env() { # set_env KUNCI NILAI (tanpa menampilkan nilai)
   install -m 600 "$tmp" "$KIRIM_ENV"
   rm -f "$tmp"
 }
+# Alamat penerima selalu mengikuti versi terbaru skrip (juga saat --update).
+set_env MAIL_TO "$MAIL_TO"
 if [[ "$SET_SMTP" == "1" || -n "${SMTP_USER:-}" ]]; then
   if [[ -z "${SMTP_USER:-}" ]]; then
     [[ -r /dev/tty ]] || die "--smtp butuh terminal interaktif (atau berikan SMTP_USER dan SMTP_PASS sebagai variabel)."
-    read -r -p "Alamat Gmail pengirim: " SMTP_USER </dev/tty
+    read -r -p "Alamat email pengirim (mis. kirimsoal@sman2makassar.sch.id): " SMTP_USER </dev/tty
     read -r -s -p "App Password Gmail (16 huruf, tidak tampil): " SMTP_PASS </dev/tty; echo
   fi
   [[ -n "$SMTP_USER" && -n "${SMTP_PASS:-}" ]] || die "Alamat Gmail dan App Password wajib diisi."

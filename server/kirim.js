@@ -7,7 +7,7 @@
  * Konfigurasi lewat variabel lingkungan (biasanya /etc/konver-soal/kirim.env):
  *   SMTP_HOST=smtp.gmail.com   SMTP_PORT=465   SMTP_SECURE=true
  *   SMTP_USER=pengirim@gmail.com   SMTP_PASS=<app password 16 huruf>
- *   MAIL_TO=soal@sman2makassar.sch.id   MAIL_FROM_NAME=Konver Soal
+ *   MAIL_TO=terimasoal@sman2makassar.sch.id   MAIL_FROM_NAME=Konver Soal
  *   PORT=3091   HOST=127.0.0.1   RATE_PER_HOUR=20
  *
  * Endpoint:  POST /api/kirim  (JSON)
@@ -26,7 +26,7 @@ const cfg = {
   secure: !/^(0|false|no)$/i.test(process.env.SMTP_SECURE || 'true'),
   user: process.env.SMTP_USER || '',
   pass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
-  to: process.env.MAIL_TO || 'soal@sman2makassar.sch.id',
+  to: process.env.MAIL_TO || 'terimasoal@sman2makassar.sch.id',
   fromName: process.env.MAIL_FROM_NAME || 'Konver Soal',
   listenPort: parseInt(process.env.PORT || '3091', 10),
   listenHost: process.env.HOST || '127.0.0.1',

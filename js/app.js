@@ -648,6 +648,16 @@
     } catch (e) { /* penyimpanan lokal tidak tersedia */ }
     $('#kirimError').hidden = true;
     $('#kirimDialog').showModal();
+    // Alamat tujuan sebenarnya diatur di server; tampilkan yang berlaku.
+    if (location.protocol !== 'file:') {
+      fetch('api/kirim/status').then(r => (r.ok ? r.json() : null)).then(s => {
+        if (s && s.tujuan) $('#kirimTujuan').textContent = s.tujuan;
+        if (s && s.siap === false) {
+          $('#kirimError').textContent = 'Akun email pengirim belum diatur di server. Hubungi admin.';
+          $('#kirimError').hidden = false;
+        }
+      }).catch(() => {});
+    }
   }
 
   async function sendKirim(e) {

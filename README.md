@@ -72,16 +72,19 @@ Perintah ini menjalankan `git pull`, lalu memasang ulang dengan pengaturan port/
 
 **Hapus:** `sudo bash deploy/install.sh --uninstall`
 
-### Tombol "Kirim" (kirim soal ke soal@sman2makassar.sch.id)
+### Tombol "Kirim" (kirim soal ke terimasoal@sman2makassar.sch.id)
+
+Pengirim: akun **kirimsoal@sman2makassar.sch.id** (diisi saat `--smtp`), penerima: **terimasoal@sman2makassar.sch.id**.
+Penerima bisa diganti saat pasang/update: `sudo MAIL_TO=alamat@sekolah.sch.id bash deploy/install.sh --update`.
 
 Tombol **Kirim** menampilkan konfirmasi *"Apakah soal yang Anda kirim sudah diperiksa dengan baik dan benar?"*
 beserta isian nama guru, mata pelajaran, dan kelas. Setelah **Ya, kirim**, file RTF dikirim lewat layanan kecil
 di server (`server/kirim.js`, dipasang otomatis oleh `install.sh` sebagai service `konver-soal-kirim`).
 Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke alamat lain.
 
-Layanan ini butuh satu **akun Gmail pengirim** dengan **App Password**:
+Layanan ini butuh satu **akun pengirim Google (Gmail / Google Workspace sekolah)** dengan **App Password**:
 
-1. Masuk ke akun Gmail pengirim, aktifkan **Verifikasi 2 Langkah** (Google Account → Keamanan).
+1. Masuk ke akun pengirim (kirimsoal@sman2makassar.sch.id), aktifkan **Verifikasi 2 Langkah** (Google Account → Keamanan).
 2. Buka https://myaccount.google.com/apppasswords, buat App Password (mis. nama "Konver Soal"), salin 16 hurufnya.
 3. Di server jalankan, lalu isi alamat Gmail dan App Password saat ditanya (tidak tampil di layar):
 
