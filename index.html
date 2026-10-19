@@ -74,6 +74,7 @@
         <label class="check"><input type="checkbox" id="cfgBlank" checked> Baris kosong antar soal</label>
         <label class="check"><input type="checkbox" id="cfgTblImg" checked> Tabel dalam soal dijadikan gambar</label>
         <label class="check"><input type="checkbox" id="cfgPhoto" checked> Kompres foto besar</label>
+        <label class="check" title="ExamView hanya membaca gambar WMF. Matikan bila RTF tidak untuk ExamView agar file lebih kecil."><input type="checkbox" id="cfgExamView" checked> Kompatibel ExamView (gambar + WMF)</label>
       </section>
 
       <section class="panel" id="issuePanel">
@@ -124,6 +125,7 @@
   <script src="lib/WMFJS.bundle.min.js"></script>
   <script src="lib/EMFJS.bundle.min.js"></script>
   <script src="js/metafile-image.js"></script>
+  <script src="js/wmf-fallback.js"></script>
   <script src="js/omml-image.js"></script>
   <script src="js/app.js"></script>
 </body>

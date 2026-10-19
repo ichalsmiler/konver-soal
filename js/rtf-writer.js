@@ -47,22 +47,31 @@
     return parts.join('\n');
   }
 
+  // WMF dari dokumen sering diawali header "placeable" (22 byte, 0x9AC6CDD7) yang tidak
+  // boleh ada di dalam RTF (ExamView menolak: error -12). Buang header itu.
+  function stripPlaceable(b64) {
+    const bin = typeof atob === 'function' ? atob(b64.slice(0, 8)) : Buffer.from(b64.slice(0, 8), 'base64').toString('binary');
+    if (bin.charCodeAt(0) !== 0xD7 || bin.charCodeAt(1) !== 0xCD || bin.charCodeAt(2) !== 0xC6 || bin.charCodeAt(3) !== 0x9A) return b64;
+    const all = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+    const rest = all.slice(22);
+    return typeof btoa === 'function' ? btoa(rest) : Buffer.from(rest, 'binary').toString('base64');
+  }
+
   function pict(img) {
     let w = img.w || 2880, h = img.h || 2160;
     if (w > MAX_IMG_W) { h = Math.round(h * MAX_IMG_W / w); w = MAX_IMG_W; }
-    let kind;
-    let pw, ph;
+    const goal = '\\picwgoal' + w + '\\pichgoal' + h;
+    const himetric = '\\picw' + Math.round(w * 2540 / 1440) + '\\pich' + Math.round(h * 2540 / 1440);
     if (img.type === 'png' || img.type === 'jpeg') {
-      kind = img.type === 'png' ? '\\pngblip' : '\\jpegblip';
-      pw = img.pxW || Math.round(w / 15); ph = img.pxH || Math.round(h / 15);
-    } else if (img.type === 'emf') {
-      kind = '\\emfblip';
-      pw = Math.round(w * 2540 / 1440); ph = Math.round(h * 2540 / 1440);
-    } else if (img.type === 'wmf') {
-      kind = '\\wmetafile8';
-      pw = Math.round(w * 2540 / 1440); ph = Math.round(h * 2540 / 1440);
-    } else return '';
-    return '{\\pict' + kind + '\\picw' + pw + '\\pich' + ph + '\\picwgoal' + w + '\\pichgoal' + h + '\n' + b64ToHex(img.b64) + '}';
+      const blip = '{\\pict' + (img.type === 'png' ? '\\pngblip' : '\\jpegblip') +
+        '\\picw' + (img.pxW || Math.round(w / 15)) + '\\pich' + (img.pxH || Math.round(h / 15)) + goal + '\n' + b64ToHex(img.b64) + '}';
+      // Seperti Word: PNG/JPEG untuk program modern + cadangan WMF untuk pembaca lama (ExamView).
+      if (img.wmf) return '{\\*\\shppict' + blip + '}{\\nonshppict{\\pict\\wmetafile8' + himetric + goal + '\n' + b64ToHex(img.wmf) + '}}';
+      return blip;
+    }
+    if (img.type === 'emf') return '{\\pict\\emfblip' + himetric + goal + '\n' + b64ToHex(img.b64) + '}';
+    if (img.type === 'wmf') return '{\\pict\\wmetafile8' + himetric + goal + '\n' + b64ToHex(stripPlaceable(img.b64)) + '}';
+    return '';
   }
 
   function runs(segs, isOption) {

@@ -14,6 +14,7 @@
     blankLine: $('#cfgBlank').checked,
     tableImages: $('#cfgTblImg').checked,
     compressPhotos: $('#cfgPhoto').checked,
+    examView: $('#cfgExamView').checked,
   });
   const hasTable = q => q.stem.some(isTable);
 
@@ -538,6 +539,58 @@
     })));
   }
 
+  // ---------- Cadangan WMF untuk ExamView ----------
+  // ExamView hanya membaca gambar WMF ({\nonshppict}); PNG/JPEG ditolak (error -4).
+  // Gambar abu-abu: DIB 4-bit hingga 2x ukuran tampil; berwarna (foto): DIB 24-bit di ukuran tampil.
+  const wmfCache = new WeakMap();
+  async function addWmf(img) {
+    if (!img || (img.type !== 'png' && img.type !== 'jpeg') || !img.b64) return img;
+    if (wmfCache.has(img)) return wmfCache.get(img);
+    let out = img;
+    try {
+      const el = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = rej;
+        im.src = 'data:image/' + img.type + ';base64,' + img.b64;
+      });
+      const nw = el.naturalWidth, nh = el.naturalHeight;
+      const dispW = Math.max(1, Math.round((img.w || nw * 15) / 15));
+      const draw = targetW => {
+        const s = Math.min(1, targetW / nw);
+        const w = Math.max(1, Math.round(nw * s)), h = Math.max(1, Math.round(nh * s));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(el, 0, 0, w, h);
+        return { w, h, data: ctx.getImageData(0, 0, w, h).data };
+      };
+      let px = draw(dispW * 2);
+      if (!WmfFallback.isGray(px.data)) px = draw(dispW);
+      out = Object.assign({}, img, { wmf: WmfFallback.toBase64(WmfFallback.fromRgba(px.w, px.h, px.data)) });
+    } catch (e) {
+      console.error('Cadangan WMF gagal dibuat:', e);
+    }
+    wmfCache.set(img, out);
+    return out;
+  }
+
+  async function withWmfFallbacks(questions) {
+    const segs = async list => Promise.all(list.map(async s => (s.img ? Object.assign({}, s, { img: await addWmf(s.img) }) : s)));
+    const item = async p => {
+      if (!isTable(p)) return segs(p);
+      const rows = await Promise.all(p.table.rows.map(row => Promise.all(row.map(async c => Object.assign({}, c, { paras: await Promise.all(c.paras.map(segs)) })))));
+      return { table: Object.assign({}, p.table, { rows }) };
+    };
+    return Promise.all(questions.map(async q => Object.assign({}, q, {
+      stem: await Promise.all(q.stem.map(item)),
+      options: await Promise.all(q.options.map(segs)),
+    })));
+  }
+
   async function showTableImages(q) {
     const body = $('#imgDialogBody');
     body.innerHTML = '';
@@ -558,6 +611,7 @@
     if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
     let questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
     if (settings.compressPhotos) questions = await withCompressedPhotos(questions);
+    if (settings.examView) questions = await withWmfFallbacks(questions);
     const rtf = RtfWriter.build(questions, settings);
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
