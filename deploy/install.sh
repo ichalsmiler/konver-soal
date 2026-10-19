@@ -9,6 +9,7 @@
 #   sudo bash deploy/install.sh --domain soal.sekolah.sch.id
 #   sudo bash deploy/install.sh --domain soal.sekolah.sch.id --email admin@sekolah.sch.id   # + HTTPS
 #   sudo bash deploy/install.sh --update                # git pull lalu pasang ulang
+#   sudo bash deploy/install.sh --smtp                  # atur akun Gmail pengirim (fitur Kirim)
 #   sudo bash deploy/install.sh --uninstall
 #
 set -euo pipefail
@@ -24,6 +25,16 @@ DOMAIN=""
 PORT="80"
 EMAIL=""
 MODE="install"
+SET_SMTP=0
+
+# Layanan "Kirim soal" (email)
+KIRIM_DIR="/usr/local/lib/${APP}"
+KIRIM_ENV_DIR="/etc/${APP}"
+KIRIM_ENV="${KIRIM_ENV_DIR}/kirim.env"
+KIRIM_SERVICE="${APP}-kirim"
+KIRIM_PORT="3091"
+MAIL_TO="soal@sman2makassar.sch.id"
+API_SNIPPET="/etc/nginx/snippets/${APP}-api.conf"
 
 c_ok=$'\e[32m'; c_warn=$'\e[33m'; c_err=$'\e[31m'; c_off=$'\e[0m'
 info() { echo "${c_ok}==>${c_off} $*"; }
@@ -37,6 +48,7 @@ Pemakaian: sudo bash deploy/install.sh [opsi]
   --domain NAMA   nama domain, mis. soal.sekolah.sch.id
   --email ALAMAT  aktifkan HTTPS Let's Encrypt (butuh --domain)
   --update        git pull lalu pasang ulang (konfigurasi lama dipertahankan)
+  --smtp          atur akun Gmail pengirim untuk tombol Kirim (ditanya interaktif)
   --uninstall     hapus situs dari nginx
 EOF
   exit 0
@@ -48,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --port)      PORT="${2:-}"; shift 2 ;;
     --email)     EMAIL="${2:-}"; shift 2 ;;
     --update)    MODE="update"; shift ;;
+    --smtp)      SET_SMTP=1; shift ;;
     --uninstall) MODE="uninstall"; shift ;;
     -h|--help)   usage ;;
     *) die "Opsi tidak dikenal: $1 (lihat --help)" ;;
@@ -65,8 +78,15 @@ fi
 # ---------- Uninstall ----------
 if [[ "$MODE" == "uninstall" ]]; then
   info "Menghapus konfigurasi nginx dan file web ${APP}"
-  rm -f "$SITE_LINK" "$SITE_FILE"
+  rm -f "$SITE_LINK" "$SITE_FILE" "$API_SNIPPET"
   rm -rf "$WEB_DIR"
+  if systemctl list-unit-files 2>/dev/null | grep -q "^${KIRIM_SERVICE}"; then
+    systemctl disable --now "$KIRIM_SERVICE" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/${KIRIM_SERVICE}.service"
+    systemctl daemon-reload
+  fi
+  rm -rf "$KIRIM_DIR"
+  warn "Pengaturan email di ${KIRIM_ENV} tidak dihapus (hapus manual bila perlu)."
   if command -v nginx >/dev/null && nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
   info "Selesai. Folder sumber (git clone) tidak dihapus."
   exit 0
@@ -90,10 +110,11 @@ git_auth() {
   fi
 }
 
-info "Memasang paket: nginx git rsync"
+info "Memasang paket: nginx git rsync nodejs"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq </dev/null
 apt-get install -y -qq nginx git rsync </dev/null >/dev/null
+if ! command -v node >/dev/null; then apt-get install -y -qq nodejs </dev/null >/dev/null; fi
 if [[ -n "$EMAIL" ]]; then
   info "Memasang certbot untuk HTTPS"
   apt-get install -y -qq certbot python3-certbot-nginx </dev/null >/dev/null
@@ -133,16 +154,98 @@ fi
 info "Menyalin aplikasi ke $WEB_DIR"
 mkdir -p "$WEB_DIR"
 rsync -a --delete \
-  --exclude '.git' --exclude '.github' --exclude '.claude' --exclude 'deploy' \
+  --exclude '.git' --exclude '.github' --exclude '.claude' --exclude 'deploy' --exclude 'server' \
   --exclude '*.md' --exclude '.gitignore' \
   "$SRC_DIR/" "$WEB_DIR/"
 chown -R www-data:www-data "$WEB_DIR"
 find "$WEB_DIR" -type d -exec chmod 755 {} +
 find "$WEB_DIR" -type f -exec chmod 644 {} +
 
+# ---------- Layanan "Kirim soal" ke email ----------
+info "Memasang layanan kirim email (${KIRIM_SERVICE})"
+mkdir -p "$KIRIM_DIR" "$KIRIM_ENV_DIR"
+install -m 644 "$SRC_DIR/server/kirim.js" "$KIRIM_DIR/kirim.js"
+if [[ ! -f "$KIRIM_ENV" ]]; then
+  cat > "$KIRIM_ENV" <<ENV
+# Akun Gmail pengirim untuk tombol "Kirim" (isi lewat: sudo bash deploy/install.sh --smtp)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=
+SMTP_PASS=
+MAIL_TO=${MAIL_TO}
+MAIL_FROM_NAME=Konver Soal
+PORT=${KIRIM_PORT}
+HOST=127.0.0.1
+RATE_PER_HOUR=20
+ENV
+fi
+chmod 600 "$KIRIM_ENV"
+
+set_env() { # set_env KUNCI NILAI (tanpa menampilkan nilai)
+  local key="$1" val="$2" tmp
+  tmp="$(mktemp)"
+  grep -v "^${key}=" "$KIRIM_ENV" > "$tmp" || true
+  printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  install -m 600 "$tmp" "$KIRIM_ENV"
+  rm -f "$tmp"
+}
+if [[ "$SET_SMTP" == "1" || -n "${SMTP_USER:-}" ]]; then
+  if [[ -z "${SMTP_USER:-}" ]]; then
+    [[ -r /dev/tty ]] || die "--smtp butuh terminal interaktif (atau berikan SMTP_USER dan SMTP_PASS sebagai variabel)."
+    read -r -p "Alamat Gmail pengirim: " SMTP_USER </dev/tty
+    read -r -s -p "App Password Gmail (16 huruf, tidak tampil): " SMTP_PASS </dev/tty; echo
+  fi
+  [[ -n "$SMTP_USER" && -n "${SMTP_PASS:-}" ]] || die "Alamat Gmail dan App Password wajib diisi."
+  set_env SMTP_USER "$SMTP_USER"
+  set_env SMTP_PASS "$(printf '%s' "$SMTP_PASS" | tr -d ' ')"
+  info "Akun pengirim disimpan di ${KIRIM_ENV} (hanya bisa dibaca root)"
+fi
+
+cat > "/etc/systemd/system/${KIRIM_SERVICE}.service" <<UNIT
+[Unit]
+Description=Konver Soal - layanan kirim soal ke email
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=${KIRIM_ENV}
+ExecStart=$(command -v node) ${KIRIM_DIR}/kirim.js
+Restart=on-failure
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable "$KIRIM_SERVICE" >/dev/null 2>&1
+systemctl restart "$KIRIM_SERVICE"
+
+mkdir -p "$(dirname "$API_SNIPPET")"
+cat > "$API_SNIPPET" <<NGINX
+# Dibuat oleh deploy/install.sh: tombol "Kirim" -> layanan email lokal
+location = /api/kirim {
+    proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim;
+    proxy_set_header X-Real-IP \$remote_addr;
+    client_max_body_size 40m;
+    proxy_read_timeout 120s;
+}
+location = /api/kirim/status {
+    proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim/status;
+}
+NGINX
+
 # ---------- Konfigurasi nginx ----------
 if [[ "${KEEP_CERT:-0}" == "1" ]]; then
   info "Konfigurasi HTTPS yang ada dipertahankan"
+  # Sisipkan rute /api/kirim ke konfigurasi lama bila belum ada.
+  if ! grep -q "$API_SNIPPET" "$SITE_FILE"; then
+    sed -i "s|^\(\s*\)root ${WEB_DIR};|&\n\1include ${API_SNIPPET};|" "$SITE_FILE"
+  fi
 else
   SERVER_NAME="${DOMAIN:-_}"
   info "Menulis konfigurasi nginx (server_name ${SERVER_NAME}, port ${PORT})"
@@ -154,6 +257,7 @@ server {
     server_name ${SERVER_NAME};
 
     root ${WEB_DIR};
+    include ${API_SNIPPET};
     index index.html;
 
     add_header X-Content-Type-Options "nosniff" always;
@@ -218,3 +322,8 @@ echo "    Buka      : ${URL}"
 echo "    File web  : ${WEB_DIR}"
 echo "    Sumber    : ${SRC_DIR}"
 echo "    Update    : sudo bash ${SRC_DIR}/deploy/install.sh --update"
+if grep -q '^SMTP_USER=.\+' "$KIRIM_ENV" && grep -q '^SMTP_PASS=.\+' "$KIRIM_ENV"; then
+  echo "    Kirim     : aktif -> ${MAIL_TO}"
+else
+  warn "Tombol Kirim belum aktif. Atur akun Gmail pengirim: sudo bash ${SRC_DIR}/deploy/install.sh --update --smtp"
+fi

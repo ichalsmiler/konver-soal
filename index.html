@@ -22,6 +22,10 @@
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM5 18h14v2H5v-2Z"/></svg>
         Ekspor RTF
       </button>
+      <button class="btn primary" id="btnKirim" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 21 23 12 2 3v7l15 2-15 2v7Z"/></svg>
+        Kirim
+      </button>
     </div>
   </header>
 
@@ -105,6 +109,33 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
+
+  <dialog id="kirimDialog" class="img-dialog kirim-dialog">
+    <form id="kirimForm" method="dialog">
+      <div class="kirim-warn">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>
+        <div>
+          <strong>Apakah soal yang Anda kirim sudah diperiksa dengan baik dan benar?</strong>
+          <p class="hint" id="kirimInfo"></p>
+          <p class="hint">File RTF akan dikirim ke <b>soal@sman2makassar.sch.id</b>.</p>
+        </div>
+      </div>
+      <label class="field">Nama guru
+        <input id="kirimNama" autocomplete="name" required maxlength="80">
+      </label>
+      <label class="field">Mata pelajaran
+        <input id="kirimMapel" required maxlength="80" placeholder="mis. Ekonomi">
+      </label>
+      <label class="field">Kelas
+        <input id="kirimKelas" required maxlength="40" placeholder="mis. XII">
+      </label>
+      <p class="err" id="kirimError" hidden></p>
+      <div class="kirim-actions">
+        <button class="btn" id="kirimBatal" type="button">Batal, periksa lagi</button>
+        <button class="btn primary" id="kirimOk" type="submit">Ya, kirim</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="imgDialog" class="img-dialog">
     <div class="img-dialog-head">

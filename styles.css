@@ -183,6 +183,14 @@ details summary { cursor: pointer; font-size: 14px; }
 .img-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .img-dialog figure { margin: 10px 0 0; overflow-x: auto; }
 .img-dialog img { display: block; background: #fff; }
+.kirim-dialog { width: min(460px, calc(100vw - 32px)); }
+.kirim-warn { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.kirim-warn svg { flex: none; color: var(--warn); }
+.kirim-warn strong { display: block; font-size: 15px; line-height: 1.4; }
+.kirim-warn p { margin: 6px 0 0; }
+.warn-text { color: var(--warn); font-weight: 600; }
+.kirim-dialog .err { margin: 4px 0 10px; }
+.kirim-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .img-dialog figcaption { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .opts { list-style: none; margin: 6px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 2px; }
 .opt { display: flex; align-items: flex-start; gap: 6px; }

@@ -72,6 +72,27 @@ Perintah ini menjalankan `git pull`, lalu memasang ulang dengan pengaturan port/
 
 **Hapus:** `sudo bash deploy/install.sh --uninstall`
 
+### Tombol "Kirim" (kirim soal ke soal@sman2makassar.sch.id)
+
+Tombol **Kirim** menampilkan konfirmasi *"Apakah soal yang Anda kirim sudah diperiksa dengan baik dan benar?"*
+beserta isian nama guru, mata pelajaran, dan kelas. Setelah **Ya, kirim**, file RTF dikirim lewat layanan kecil
+di server (`server/kirim.js`, dipasang otomatis oleh `install.sh` sebagai service `konver-soal-kirim`).
+Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke alamat lain.
+
+Layanan ini butuh satu **akun Gmail pengirim** dengan **App Password**:
+
+1. Masuk ke akun Gmail pengirim, aktifkan **Verifikasi 2 Langkah** (Google Account → Keamanan).
+2. Buka https://myaccount.google.com/apppasswords, buat App Password (mis. nama "Konver Soal"), salin 16 hurufnya.
+3. Di server jalankan, lalu isi alamat Gmail dan App Password saat ditanya (tidak tampil di layar):
+
+```bash
+sudo bash /opt/konver-soal/deploy/install.sh --update --smtp
+```
+
+Pengaturan disimpan di `/etc/konver-soal/kirim.env` (hanya bisa dibaca root). Cek layanan:
+`systemctl status konver-soal-kirim`, log: `journalctl -u konver-soal-kirim`.
+Tombol Kirim hanya berfungsi bila aplikasi dibuka dari server (bukan dari file `index.html` di komputer).
+
 Yang dilakukan skrip:
 
 - memasang `nginx`, `git`, dan `rsync` (plus `certbot` bila HTTPS);

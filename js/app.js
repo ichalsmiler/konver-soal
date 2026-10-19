@@ -605,23 +605,90 @@
     $('#imgDialog').showModal();
   }
 
+  const outName = () => (state.name.replace(/\.[^.]+$/, '') || 'soal') + ' (rapi).rtf';
+
+  /** RTF hasil akhir (sama untuk Ekspor dan Kirim). */
+  async function buildRtf() {
+    const settings = cfg();
+    let questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
+    if (settings.compressPhotos) questions = await withCompressedPhotos(questions);
+    if (settings.examView) questions = await withWmfFallbacks(questions);
+    return RtfWriter.build(questions, settings);
+  }
+
   async function exportRtf() {
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
     if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
-    let questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
-    if (settings.compressPhotos) questions = await withCompressedPhotos(questions);
-    if (settings.examView) questions = await withWmfFallbacks(questions);
-    const rtf = RtfWriter.build(questions, settings);
+    const rtf = await buildRtf();
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (state.name.replace(/\.[^.]+$/, '') || 'soal') + ' (rapi).rtf';
+    a.download = outName();
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     toast('RTF diunduh: ' + a.download);
+  }
+
+  // ---------- Kirim ke email sekolah ----------
+  const KIRIM_KEY = 'konver-soal:pengirim';
+  function openKirim() {
+    const settings = cfg();
+    const bad = state.questions.filter(q => validate(q, settings).length).length;
+    $('#kirimInfo').textContent = state.questions.length + ' soal dari "' + state.name + '"' +
+      (bad ? ' — ' + bad + ' soal masih ditandai "Perlu dicek".' : '.');
+    $('#kirimInfo').classList.toggle('warn-text', bad > 0);
+    try {
+      const saved = JSON.parse(localStorage.getItem(KIRIM_KEY) || '{}');
+      if (saved.nama && !$('#kirimNama').value) $('#kirimNama').value = saved.nama;
+      if (saved.mapel && !$('#kirimMapel').value) $('#kirimMapel').value = saved.mapel;
+      if (saved.kelas && !$('#kirimKelas').value) $('#kirimKelas').value = saved.kelas;
+    } catch (e) { /* penyimpanan lokal tidak tersedia */ }
+    $('#kirimError').hidden = true;
+    $('#kirimDialog').showModal();
+  }
+
+  async function sendKirim(e) {
+    e.preventDefault();
+    const nama = $('#kirimNama').value.trim(), mapel = $('#kirimMapel').value.trim(), kelas = $('#kirimKelas').value.trim();
+    const err = msg => { $('#kirimError').textContent = msg; $('#kirimError').hidden = false; };
+    if (!nama || !mapel || !kelas) return err('Nama guru, mata pelajaran, dan kelas wajib diisi.');
+    if (location.protocol === 'file:') return err('Fitur Kirim hanya bisa dipakai bila aplikasi dibuka dari server sekolah, bukan dari file di komputer.');
+    try { localStorage.setItem(KIRIM_KEY, JSON.stringify({ nama, mapel, kelas })); } catch (x) { /* abaikan */ }
+    const btn = $('#kirimOk');
+    btn.disabled = true;
+    btn.textContent = 'Mengirim…';
+    try {
+      const rtf = await buildRtf();
+      const bytes = new Uint8Array(rtf.length);
+      for (let i = 0; i < rtf.length; i++) bytes[i] = rtf.charCodeAt(i) & 0xFF;
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const settings = cfg();
+      const res = await fetch('api/kirim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nama, mapel, kelas, fileName: outName(), rtfBase64: btoa(bin), namaFileAsli: state.name,
+          jumlahSoal: state.questions.length, perluDicek: state.questions.filter(q => validate(q, settings).length).length,
+        }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch (x) { data = {}; }
+      if (!res.ok || !data.ok) {
+        throw new Error(data.pesan || (res.status === 404 || res.status === 405
+          ? 'Layanan kirim belum terpasang di server.' : 'Gagal mengirim (kode ' + res.status + ').'));
+      }
+      $('#kirimDialog').close();
+      toast(data.pesan || 'Soal terkirim.');
+    } catch (x) {
+      err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ya, kirim';
+    }
   }
 
   let toastTimer = null;
@@ -646,6 +713,9 @@
     processLines(textLines(txt), 'Soal tempel.txt');
   });
   $('#btnExport').addEventListener('click', exportRtf);
+  $('#btnKirim').addEventListener('click', openKirim);
+  $('#kirimForm').addEventListener('submit', sendKirim);
+  $('#kirimBatal').addEventListener('click', () => $('#kirimDialog').close());
   $('#btnReset').addEventListener('click', () => {
     $('#work').hidden = true;
     $('#topActions').hidden = true;
