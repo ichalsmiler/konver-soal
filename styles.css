@@ -189,8 +189,6 @@ details summary { cursor: pointer; font-size: 14px; }
 .opt .edit { flex: 1; min-width: 0; padding-top: 2px; padding-bottom: 2px; white-space: pre-wrap; tab-size: 48px; }
 /* Opsi jurnal (debit/kredit): baris jangan dibungkus agar kolom nominal tetap sejajar seperti di Word. */
 .opt .edit.multi { white-space: pre; overflow-x: auto; }
-.opt .edit .jcol { display: inline-block; vertical-align: top; }
-.opt .edit .jtab { display: none; }
 .key {
   flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
   background: var(--surface); color: var(--muted); font-weight: 600; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;

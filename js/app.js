@@ -166,7 +166,7 @@
       }
     })(rootEl, {});
     return paras
-      .map(p => (isTable(p) || keepLines === 'raw' ? p : keepLines === 'tabs' ? Segs.tidyTabs(p) : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
+      .map(p => (isTable(p) ? p : keepLines === 'tabs' ? Segs.tidyTabs(p) : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
       .filter(p => isTable(p) || !Segs.isEmpty(p));
   }
 
@@ -250,39 +250,6 @@
     applyFilter();
   }
 
-  /**
-   * Opsi jurnal (debit tanpa tab di depan, kredit diawali tab): kolom akun & nominal
-   * diberi lebar tetap per soal, sama seperti tab stop di RTF. Tab aslinya tetap ada
-   * (disembunyikan) agar hasil edit terbaca kembali dengan benar.
-   */
-  let jctx = null;
-  function journalHtml(q) {
-    const parse = o => {
-      if (o.some(s => s.img)) return null;
-      const t = Segs.text(o);
-      if (!t.includes('\n')) return null;
-      const lines = t.split('\n').map(l => ({ credit: /^\t/.test(l), parts: l.replace(/^\t+/, '').split(/\t+/).map(p => p.trim()).filter(Boolean) }));
-      return lines.every(l => l.parts.length === 2) ? lines : null;
-    };
-    const js = q.options.map(parse);
-    if (!js.some(Boolean)) return null;
-    jctx = jctx || document.createElement('canvas').getContext('2d');
-    jctx.font = '16px "Times New Roman", Times, serif';
-    const w = s => jctx.measureText(s).width;
-    const I = 48;
-    let deb = 0, cred = 0, debAmt = 0;
-    for (const lines of js) if (lines) for (const l of lines) {
-      if (l.credit) cred = Math.max(cred, w(l.parts[0]));
-      else { deb = Math.max(deb, w(l.parts[0])); debAmt = Math.max(debAmt, w(l.parts[1])); }
-    }
-    const D = Math.ceil(Math.max(deb, I + cred) + 24), K = Math.ceil(D + debAmt + 24);
-    const tab = '<span class="jtab">\t</span>';
-    const cell = (txt, width) => '<span class="jcol" style="width:' + width + 'px">' + escHtml(txt) + '</span>';
-    return js.map(lines => lines && lines.map(l => (l.credit
-      ? tab + '<span class="jcol" style="width:' + I + 'px"></span>' + cell(l.parts[0], K - I) + tab + escHtml(l.parts[1])
-      : cell(l.parts[0], D) + tab + escHtml(l.parts[1]))).join('<br>'));
-  }
-
   function card(q, n, settings) {
     const el = document.createElement('article');
     el.className = 'q';
@@ -308,11 +275,10 @@
       '</div></div>' +
       '<div class="edit stem" contenteditable="true" data-field="stem" aria-label="Teks soal">' + stemHtml + '</div>';
     if (q.type === 'mc') {
-      const journal = journalHtml(q);
       body += '<ol class="opts">' + q.options.map((o, i) => {
         const L = letter(i);
         return '<li class="opt"><button class="key' + (q.answer === L ? ' on' : '') + '" data-act="key" data-i="' + i + '" title="Jadikan kunci">' + L.toLowerCase() + '</button>' +
-          '<div class="edit' + (/\n/.test(Segs.text(o)) ? ' multi' : '') + '" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + (journal && journal[i] ? journal[i] : segsToHtml(o)) + '</div>' +
+          '<div class="edit' + (/\n/.test(Segs.text(o)) ? ' multi' : '') + '" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + segsToHtml(o) + '</div>' +
           '<button class="icon-btn del" data-act="rmopt" data-i="' + i + '" title="Hapus opsi">' + ICON.x + '</button></li>';
       }).join('') + '</ol>' +
         '<div class="q-foot"><button class="link-btn" data-act="addopt">+ Opsi</button>' +
@@ -453,8 +419,7 @@
       const i = parseInt(t.dataset.i, 10);
       // Opsi berbaris ganda (jurnal debit/kredit): baris baru & tab dipertahankan.
       const multi = /\n/.test(Segs.text(q.options[i] || []));
-      // Baris jurnal dirangkai dulu baru dirapikan, agar tab di awal baris kredit tidak terbuang.
-      const paras = htmlToParas(t, multi ? 'raw' : false).filter(p => !isTable(p));
+      const paras = htmlToParas(t, multi).filter(p => !isTable(p));
       const joined = paras.reduce((a, p, k) => a.concat(k ? [{ t: multi ? '\n' : ' ' }] : [], p), []);
       q.options[i] = multi ? Segs.tidyLines(joined) : Segs.tidy(joined);
     } else if (f === 'essay') q.answer = t.value;

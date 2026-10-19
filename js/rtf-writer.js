@@ -155,57 +155,9 @@
 
     const body = [];
     const para = (fmt, content) => body.push('\\pard\\plain\\ql\\sa0\\sl240\\slmult1' + fmt + base + ' ' + content + '\\par');
-    const listPara = (ls, label, indent, content, extra) =>
+    const listPara = (ls, label, indent, content) =>
       body.push('{\\listtext\\pard\\plain' + base + ' ' + label + '\\tab}\\pard\\plain\\ql\\sa0\\sl240\\slmult1\\fi-360\\li' + indent +
-        '\\lin' + indent + (extra || '') + '\\ls' + ls + '\\ilvl0' + base + ' ' + content + '\\par');
-
-    // Lebar teks (twips) pada huruf ekspor; di browser diukur, selain itu diperkirakan.
-    let mctx = null;
-    const textTw = text => {
-      if (typeof document !== 'undefined') {
-        mctx = mctx || document.createElement('canvas').getContext('2d');
-        mctx.font = (cfg.fontSize * 96 / 72) + 'px "' + cfg.font + '", "Times New Roman", serif';
-        return mctx.measureText(text).width * 15;
-      }
-      return text.length * cfg.fontSize * 10;
-    };
-
-    // Opsi jurnal: baris tanpa tab di depan = debit, diawali tab = kredit (akun menjorok).
-    const journalLines = o => {
-      if (!Array.isArray(o) || o.some(s => s.img)) return null;
-      const text = o.map(s => s.t).join('');
-      if (!text.includes('\n')) return null;
-      const lines = text.split('\n').map(l => ({
-        credit: /^\t/.test(l),
-        parts: l.replace(/^\t+/, '').split(/\t+/).map(p => p.trim()).filter(Boolean),
-      }));
-      return lines.every(l => l.parts.length === 2) ? lines : null;
-    };
-
-    /**
-     * Semua opsi jurnal dalam satu soal memakai tab stop yang sama:
-     * I = indentasi akun kredit, D = kolom nominal debit, K = kolom nominal kredit.
-     */
-    const journalLayout = q => {
-      const js = q.options.map(journalLines);
-      if (!js.some(Boolean)) return null;
-      const start = 720, I = start + 720;
-      let deb = 0, cred = 0, debAmt = 0;
-      for (const lines of js) if (lines) for (const l of lines) {
-        if (l.credit) cred = Math.max(cred, textTw(l.parts[0]));
-        else { deb = Math.max(deb, textTw(l.parts[0])); debAmt = Math.max(debAmt, textTw(l.parts[1])); }
-      }
-      const D = Math.round(Math.max(start + deb, I + cred) + 360);
-      const K = Math.round(D + debAmt + 360);
-      return {
-        // \tx<start>: tab setelah huruf opsi ("a.") berhenti di awal teks opsi, bukan di I.
-        fmt: '\\tx' + start + '\\tx' + I + '\\tx' + D + '\\tx' + K,
-        render: lines => lines.map(l => (l.credit
-          ? '\\tab ' + esc(l.parts[0]) + '\\tab \\tab ' + esc(l.parts[1])
-          : esc(l.parts[0]) + (start + textTw(l.parts[0]) < I ? '\\tab \\tab ' : '\\tab ') + esc(l.parts[1]))).join('\\line '),
-        lines: js,
-      };
-    };
+        '\\lin' + indent + '\\ls' + ls + '\\ilvl0' + base + ' ' + content + '\\par');
 
     // Baris soal bertab yang berurutan (mis. "Kas<tab>Rp.5.000.000") mendapat tab stop yang sama
     // agar kolom nilainya rata, dihitung dari isi terpanjang tiap kolom.
@@ -269,12 +221,7 @@
       if (q.type === 'mc') {
         const i = nMc++;
         stemParas(q, 1, i + 1);
-        const jl = journalLayout(q);
-        q.options.forEach((o, k) => {
-          const label = String.fromCharCode(97 + k) + '.';
-          if (jl && jl.lines[k]) listPara(3 + i, label, 720, jl.render(jl.lines[k]), jl.fmt);
-          else listPara(3 + i, label, 720, runs(o, true));
-        });
+        q.options.forEach((o, k) => listPara(3 + i, String.fromCharCode(97 + k) + '.', 720, runs(o, true)));
       } else {
         stemParas(q, 2, ++nEssay);
       }
