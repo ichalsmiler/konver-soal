@@ -166,7 +166,7 @@
       }
     })(rootEl, {});
     return paras
-      .map(p => (isTable(p) ? p : keepLines === 'tabs' ? Segs.tidyTabs(p) : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
+      .map(p => (isTable(p) || keepLines === 'raw' ? p : keepLines === 'tabs' ? Segs.tidyTabs(p) : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
       .filter(p => isTable(p) || !Segs.isEmpty(p));
   }
 
@@ -418,10 +418,13 @@
     else if (f === 'opt') {
       const i = parseInt(t.dataset.i, 10);
       // Opsi berbaris ganda (jurnal debit/kredit): baris baru & tab dipertahankan.
-      const multi = /\n/.test(Segs.text(q.options[i] || []));
-      const paras = htmlToParas(t, multi).filter(p => !isTable(p));
+      // Berbaris ganda bila opsi semula berbaris ganda atau editor kini berisi baris baru (Shift+Enter).
+      const multi = /\n/.test(Segs.text(q.options[i] || [])) || !!t.querySelector('br, div') || /\n/.test(t.textContent);
+      // Baris dirangkai dulu baru dirapikan sekali, agar tab di awal baris kredit tidak terbuang.
+      const paras = htmlToParas(t, multi ? 'raw' : false).filter(p => !isTable(p));
       const joined = paras.reduce((a, p, k) => a.concat(k ? [{ t: multi ? '\n' : ' ' }] : [], p), []);
       q.options[i] = multi ? Segs.tidyLines(joined) : Segs.tidy(joined);
+      t.classList.toggle('multi', /\n/.test(Segs.text(q.options[i])));
     } else if (f === 'essay') q.answer = t.value;
     else return;
     refreshMeta(q);
@@ -627,7 +630,21 @@
   qs.addEventListener('paste', onPaste);
   qs.addEventListener('keydown', e => {
     const t = e.target;
-    if (e.key === 'Enter' && t.dataset && t.dataset.field === 'opt') {
+    const field = t.dataset && t.dataset.field;
+    // Tab: sisipkan tab (menjorokkan akun kredit / meratakan nominal), bukan pindah fokus.
+    if (e.key === 'Tab' && !e.shiftKey && (field === 'opt' || field === 'stem')) {
+      e.preventDefault();
+      document.execCommand('insertText', false, '\t');
+      return;
+    }
+    // Shift+Enter di opsi: baris baru di dalam opsi (mis. baris kredit jurnal).
+    if (e.key === 'Enter' && e.shiftKey && field === 'opt') {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      t.classList.add('multi');
+      return;
+    }
+    if (e.key === 'Enter' && field === 'opt') {
       e.preventDefault();
       const all = Array.from(t.closest('.opts').querySelectorAll('[data-field="opt"]'));
       const next = all[all.indexOf(t) + 1];
