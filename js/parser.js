@@ -320,6 +320,7 @@
       if (!text) continue;
       if (ln.math && cur) cur.flags.math = true;
       if (ln.drawing && cur) cur.flags.drawing = true;
+      if (ln.pictures && cur) cur.flags.pictures = true;
       if (ln.legacy && cur) cur.flags.legacy = true;
       if (RE_ARABIC.test(text) && cur) cur.flags.arabic = true;
 
@@ -487,6 +488,7 @@
       notes.push('Baris kunci tidak dikenali' + (q.flags.badAnswer ? ': "' + q.flags.badAnswer + '"' : ''));
     }
     if (q.flags.drawing) notes.push('Ilustrasi shape Word diubah menjadi gambar — mohon dicek');
+    if (q.flags.pictures) notes.push('Gambar berlabel (A, B, ...) digabung jadi satu gambar agar label tetap sejajar');
     if (q.flags.legacy) notes.push('Ada shape Word lama (VML) yang tidak ikut terbaca — ganti dengan gambar');
     if (q.flags.math) notes.push('Ada persamaan Word, diubah jadi teks biasa — sebaiknya pakai gambar');
     if (q.flags.arabic) notes.push('Ada tulisan Arab — sesuai ketentuan sebaiknya pakai gambar');

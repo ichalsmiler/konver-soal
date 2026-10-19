@@ -39,11 +39,19 @@
   function layoutRuns(ctx, segs, x0, x1, maxRight, defSz, tabStops, defTab, origin) {
     origin = origin || 0;
     const lines = [];
-    let line = { items: [], h: 0, start: x0 };
+    let line = { items: [], h: 0, imgH: 0, start: x0 };
     let x = x0;
-    const push = () => { lines.push(line); line = { items: [], h: 0, start: x1 }; x = x1; };
+    const push = () => { lines.push(line); line = { items: [], h: 0, imgH: 0, start: x1 }; x = x1; };
     for (const s of segs) {
-      if (s.img) continue;
+      if (s.img) {
+        // Gambar inline: duduk di garis dasar baris, ukuran sesuai di Word.
+        const w = (s.img.w || 1500) / TW_PX, h = (s.img.h || 1125) / TW_PX;
+        if (x + w > maxRight && x > line.start + 0.5) push();
+        line.items.push({ img: s.img, x, w, h });
+        line.imgH = Math.max(line.imgH, h);
+        x += w;
+        continue;
+      }
       const parts = s.t.split(/(\t| +)/);
       for (const part of parts) {
         if (!part) continue;
@@ -70,8 +78,13 @@
     return lines;
   }
 
-  function drawText(ctx, items, baseline, defSz) {
+  function drawText(ctx, items, baseline, defSz, imgEls) {
     for (const it of items) {
+      if (it.img) {
+        const el = imgEls && imgEls.get(it.img);
+        if (el) ctx.drawImage(el, it.x, baseline - it.h, it.w, it.h);
+        continue;
+      }
       const s = it.s;
       ctx.font = fontCss(s, defSz);
       ctx.fillStyle = s.color || '#000';
@@ -269,10 +282,17 @@
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
     out.getContext('2d').drawImage(canvas, sx, sy, w, h, 0, 0, w, h);
-    let b64 = null;
+    let b64 = null, type = 'png';
     if (!box.color && root.TableImage && root.TableImage.encodeGray4) b64 = await root.TableImage.encodeGray4(out).catch(() => null);
-    if (!b64) b64 = out.toDataURL('image/png').split(',')[1];
-    return { type: 'png', b64, pxW: w, pxH: h, w: Math.round(w / SCALE * TW_PX), h: Math.round(h / SCALE * TW_PX) };
+    if (!b64) {
+      b64 = out.toDataURL('image/png').split(',')[1];
+      if (box.color) {
+        // Berisi foto/warna: JPEG biasanya jauh lebih kecil.
+        const jpg = out.toDataURL('image/jpeg', 0.85).split(',')[1];
+        if (jpg.length < b64.length) { b64 = jpg; type = 'jpeg'; }
+      }
+    }
+    return { type, b64, pxW: w, pxH: h, w: Math.round(w / SCALE * TW_PX), h: Math.round(h / SCALE * TW_PX) };
   }
 
   function newCanvas(wPx, hPx) {
@@ -319,7 +339,9 @@
         const laid = layoutRuns(measure, segs, x0, x1, textW, m.sz, tabs, defTab, 0);
         for (const ln of laid) {
           const fontPx = Math.max(ln.h, ptPx(m.sz));
-          const lh = lineHeight(m, fontPx);
+          // Baris bergambar setinggi gambarnya (+ ruang di bawah garis dasar), seperti di Word.
+          const lh = ln.imgH ? Math.max(lineHeight(m, fontPx), ln.imgH + fontPx * 0.25) : lineHeight(m, fontPx);
+          const baseline = ln.imgH ? y + Math.max(ln.imgH, lh * 0.8) : y + lh * 0.8;
           if (p.draw && ln.items.length) {
             if (m.jc === 'center' || m.jc === 'right') {
               const start = ln.items[0].x, last = ln.items[ln.items.length - 1];
@@ -327,7 +349,7 @@
               const target = m.jc === 'center' ? x1 + (textW - x1 - contentW) / 2 : textW - contentW;
               ln.items.forEach(it => { it.x += target - start; });
             }
-            textOps.push({ items: ln.items, baseline: y + lh * 0.8, sz: m.sz });
+            textOps.push({ items: ln.items, baseline, sz: m.sz });
           }
           y += lh;
         }
@@ -365,8 +387,10 @@
     const minY = Math.min(0, ...floats.map(f => f.y));
     const { c, ctx } = newCanvas(maxX - minX + 8, maxY - minY + 8);
     ctx.translate(4 - minX, 4 - minY);
+    const imgEls = new Map();
+    for (const op of textOps) for (const it of op.items) if (it.img && !imgEls.has(it.img)) imgEls.set(it.img, await loadImg(it.img));
     for (const f of floats) if (f.scene.behind) await drawScene(ctx, f.scene, f.x, f.y, f.m.sz);
-    for (const op of textOps) drawText(ctx, op.items, op.baseline, op.sz);
+    for (const op of textOps) drawText(ctx, op.items, op.baseline, op.sz, imgEls);
     for (const f of floats) if (!f.scene.behind) await drawScene(ctx, f.scene, f.x, f.y, f.m.sz);
     return finish(c);
   }

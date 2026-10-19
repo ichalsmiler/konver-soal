@@ -96,6 +96,8 @@ Yang dilakukan skrip:
 - Foto besar dikompres otomatis saat ekspor: resolusi diturunkan ke ±2× ukuran tampilnya dan foto disimpan
   sebagai JPEG bila jauh lebih kecil (gambar garis/diagram tetap PNG). Ukuran di Word tidak berubah dan tetap
   tajam di zoom 100%; contoh: file RTF 6,1 MB menjadi ±0,9 MB. Bisa dimatikan lewat pengaturan "Kompres foto besar".
+- Deretan gambar dengan label huruf/angka di atas atau bawahnya (mis. "A  B  C" di atas foto) digabung
+  menjadi satu gambar agar label tetap sejajar dengan gambarnya.
 - Tabel opsi (baris berlabel A–E, atau menyamping dengan A–E di baris atas) diubah menjadi opsi a–e.
 - Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
 - Bagian Essay/Uraian juga dikenali.

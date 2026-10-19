@@ -597,13 +597,45 @@
       return true;
     }
 
+    // Baris label gambar: hanya huruf/angka pendek ("A      B      C", "1   2", "I  II").
+    const LABEL_TOKEN = /^\(?([A-Ea-e]|[1-9]|I{1,3}|IV|V)[.)]?$/;
+    const labelTokens = e => e.lines.map(l => segText(l.segs)).join(' ').trim().split(/\s+/).filter(Boolean);
+    const hasImg = e => e.lines.some(l => l.segs.some(s => s.img !== undefined));
+    const plainEntry = e => e && !e.barrier && !(e.floats && e.floats.length) && !e.lines.some(l => l.auto);
+    /** 'label' | 'pic' | 'empty' | false — bagian dari deretan gambar berlabel (mis. opsi bergambar A–E). */
+    function picRowKind(e) {
+      if (!plainEntry(e)) return false;
+      const toks = labelTokens(e);
+      if (hasImg(e)) return toks.every(t => LABEL_TOKEN.test(t)) ? 'pic' : false;
+      if (!toks.length) return 'empty';
+      return toks.length <= 8 && toks.every(t => LABEL_TOKEN.test(t)) ? 'label' : false;
+    }
+
     async function buildBlocks(entries, page) {
       // Tahap 1: tentukan rentang paragraf tiap ilustrasi.
       const blocks = [];
       let lastEnd = -1;
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
-        if (!e.floats || !e.floats.length || i <= lastEnd) continue;
+        if (i <= lastEnd) continue;
+
+        // Deretan gambar dengan label huruf di atas/bawahnya -> satu gambar agar label tetap sejajar.
+        if (picRowKind(e) === 'pic') {
+          let s = i, end = i;
+          while (s - 1 > lastEnd && i - (s - 1) <= 8 && picRowKind(entries[s - 1])) s--;
+          while (end + 1 < entries.length && end + 1 - i <= 8 && picRowKind(entries[end + 1])) end++;
+          while (s < end && picRowKind(entries[s]) === 'empty') s++;
+          while (end > s && picRowKind(entries[end]) === 'empty') end--;
+          const kinds = entries.slice(s, end + 1).map(picRowKind);
+          const labelled = kinds.includes('label') || entries.slice(s, end + 1).some(en => hasImg(en) && labelTokens(en).length);
+          if (labelled) {
+            blocks.push({ s, end, anchor: i, anchorKind: true, pictures: true });
+            lastEnd = end;
+          }
+          continue;
+        }
+
+        if (!e.floats || !e.floats.length) continue;
         // Jangkar berupa teks soal (bernomor/panjang) tetap teks; shape digambar di bawahnya.
         const anchorKind = labelKind(e);
         let s = i, end = i;
@@ -628,7 +660,7 @@
         let img = null;
         try { img = await DrawingRender.renderBlock({ page, paras }); } catch (err) { console.error(err); }
         if (!blk.anchorKind) out.push(...entries[blk.anchor].lines);
-        if (img) out.push({ segs: [{ img }], auto: null, drawing: true });
+        if (img) out.push({ segs: [{ img }], auto: null, drawing: !blk.pictures, pictures: !!blk.pictures });
         i = blk.end;
         b++;
       }
