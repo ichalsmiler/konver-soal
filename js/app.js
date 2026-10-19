@@ -13,6 +13,7 @@
     fontSize: parseInt($('#cfgSize').value, 10),
     blankLine: $('#cfgBlank').checked,
     tableImages: $('#cfgTblImg').checked,
+    compressPhotos: $('#cfgPhoto').checked,
   });
   const hasTable = q => q.stem.some(isTable);
 
@@ -422,6 +423,71 @@
     }));
   }
 
+  // Kecilkan foto yang resolusinya jauh di atas ukuran tampilnya (maks ~2x), dan
+  // simpan sebagai JPEG bila jauh lebih kecil. Ukuran tampil (w/h twips) tidak berubah.
+  const MAX_DISPLAY_TW = 8500; // sama dengan batas lebar gambar di RtfWriter
+  const photoCache = new WeakMap();
+  const b64Bytes = b64 => Math.round(b64.length * 3 / 4);
+
+  function pngBitDepth(b64) {
+    const bin = atob(b64.slice(0, 40));
+    return bin.charCodeAt(24);
+  }
+
+  async function compressPhoto(img) {
+    if (!img || (img.type !== 'png' && img.type !== 'jpeg') || !img.b64) return img;
+    if (photoCache.has(img)) return photoCache.get(img);
+    let out = img;
+    try {
+      // PNG < 8 bit = gambar tabel/ilustrasi buatan aplikasi; sudah ringkas.
+      if (img.type === 'png' && pngBitDepth(img.b64) < 8) throw 0;
+      const el = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = rej;
+        im.src = 'data:image/' + img.type + ';base64,' + img.b64;
+      });
+      const pxW = el.naturalWidth, pxH = el.naturalHeight;
+      const dispW = Math.min(img.w || pxW * 15, MAX_DISPLAY_TW) / 15;
+      const scale = Math.min(1, 2 * dispW / pxW);
+      const orig = b64Bytes(img.b64);
+      const resize = scale < 0.8;
+      if (!resize && (img.type === 'jpeg' || orig < 30 * 1024)) throw 0;
+      const tw = Math.max(1, Math.round(pxW * (resize ? scale : 1)));
+      const th = Math.max(1, Math.round(pxH * (resize ? scale : 1)));
+      const c = document.createElement('canvas');
+      c.width = tw; c.height = th;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(el, 0, 0, tw, th);
+      const cands = [];
+      if (resize && img.type === 'png') cands.push({ type: 'png', b64: c.toDataURL('image/png').split(',')[1] });
+      // JPEG tidak punya transparansi: ratakan di atas putih (latar halaman).
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, tw, th);
+      const jpeg = { type: 'jpeg', b64: c.toDataURL('image/jpeg', 0.82).split(',')[1] };
+      let best = cands[0] || (resize ? null : { type: img.type, b64: img.b64 });
+      // Gambar garis/diagram tetap PNG kecuali JPEG jauh lebih hemat (foto).
+      if (!best || img.type === 'jpeg' || b64Bytes(jpeg.b64) < 0.75 * b64Bytes(best.b64)) best = jpeg;
+      if (b64Bytes(best.b64) < orig * 0.9) {
+        out = Object.assign({}, img, { type: best.type, b64: best.b64, pxW: tw, pxH: th });
+      }
+    } catch (e) {
+      if (e !== 0) console.error(e);
+    }
+    photoCache.set(img, out);
+    return out;
+  }
+
+  async function withCompressedPhotos(questions) {
+    const segs = async list => Promise.all(list.map(async s => (s.img ? Object.assign({}, s, { img: await compressPhoto(s.img) }) : s)));
+    return Promise.all(questions.map(async q => Object.assign({}, q, {
+      stem: await Promise.all(q.stem.map(p => (isTable(p) ? p : segs(p)))),
+      options: await Promise.all(q.options.map(segs)),
+    })));
+  }
+
   async function showTableImages(q) {
     const body = $('#imgDialogBody');
     body.innerHTML = '';
@@ -440,7 +506,8 @@
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
     if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
-    const questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
+    let questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
+    if (settings.compressPhotos) questions = await withCompressedPhotos(questions);
     const rtf = RtfWriter.build(questions, settings);
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
