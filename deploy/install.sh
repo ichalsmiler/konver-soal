@@ -49,6 +49,7 @@ Pemakaian: sudo bash deploy/install.sh [opsi]
   --email ALAMAT  aktifkan HTTPS Let's Encrypt (butuh --domain)
   --update        git pull lalu pasang ulang (konfigurasi lama dipertahankan)
   --smtp          atur akun Gmail pengirim untuk tombol Kirim (ditanya interaktif)
+  --cek-smtp      uji login akun pengirim ke Gmail (tanpa mengirim email)
   --uninstall     hapus situs dari nginx
 EOF
   exit 0
@@ -61,6 +62,7 @@ while [[ $# -gt 0 ]]; do
     --email)     EMAIL="${2:-}"; shift 2 ;;
     --update)    MODE="update"; shift ;;
     --smtp)      SET_SMTP=1; shift ;;
+    --cek-smtp)  MODE="cek"; shift ;;
     --uninstall) MODE="uninstall"; shift ;;
     -h|--help)   usage ;;
     *) die "Opsi tidak dikenal: $1 (lihat --help)" ;;
@@ -73,6 +75,22 @@ if [[ -n "$EMAIL" && -z "$DOMAIN" ]]; then die "HTTPS (--email) butuh --domain."
 if [[ -r /etc/os-release ]]; then
   . /etc/os-release
   [[ "${ID:-}" == "ubuntu" || "${ID_LIKE:-}" == *debian* ]] || warn "Skrip ini dibuat untuk Ubuntu, terdeteksi: ${PRETTY_NAME:-tidak diketahui}"
+fi
+
+# Jalankan "node kirim.js --cek" dengan variabel dari file pengaturan (dibaca per baris,
+# bukan di-source, karena nilai boleh mengandung spasi).
+cek_smtp() {
+  (
+    while IFS='=' read -r k v; do export "$k=$v"; done < <(grep -E '^[A-Z_]+=' "$KIRIM_ENV")
+    node "$KIRIM_DIR/kirim.js" --cek
+  )
+}
+
+# ---------- Cek login SMTP ----------
+if [[ "$MODE" == "cek" ]]; then
+  [[ -f "$KIRIM_ENV" && -f "$KIRIM_DIR/kirim.js" ]] || die "Layanan kirim belum terpasang. Jalankan dulu: sudo bash $0 --update --smtp"
+  cek_smtp
+  exit $?
 fi
 
 # ---------- Uninstall ----------
@@ -198,9 +216,15 @@ if [[ "$SET_SMTP" == "1" || -n "${SMTP_USER:-}" ]]; then
     read -r -p "Alamat email pengirim (mis. kirimsoal@sman2makassar.sch.id): " SMTP_USER </dev/tty
     read -r -s -p "App Password Gmail (16 huruf, tidak tampil): " SMTP_PASS </dev/tty; echo
   fi
-  [[ -n "$SMTP_USER" && -n "${SMTP_PASS:-}" ]] || die "Alamat Gmail dan App Password wajib diisi."
+  # Buang spasi/karakter kontrol yang ikut tertempel.
+  SMTP_USER="$(printf '%s' "$SMTP_USER" | tr -d '[:space:][:cntrl:]')"
+  SMTP_PASS="$(printf '%s' "${SMTP_PASS:-}" | tr -d '[:space:][:cntrl:]')"
+  [[ -n "$SMTP_USER" && -n "$SMTP_PASS" ]] || die "Alamat Gmail dan App Password wajib diisi."
+  if [[ ! "$SMTP_PASS" =~ ^[a-zA-Z]{16}$ ]]; then
+    warn "Sandi yang dimasukkan ${#SMTP_PASS} karakter. App Password Google biasanya tepat 16 huruf - pastikan bukan sandi akun biasa."
+  fi
   set_env SMTP_USER "$SMTP_USER"
-  set_env SMTP_PASS "$(printf '%s' "$SMTP_PASS" | tr -d ' ')"
+  set_env SMTP_PASS "$SMTP_PASS"
   info "Akun pengirim disimpan di ${KIRIM_ENV} (hanya bisa dibaca root)"
 fi
 
@@ -325,7 +349,8 @@ echo "    File web  : ${WEB_DIR}"
 echo "    Sumber    : ${SRC_DIR}"
 echo "    Update    : sudo bash ${SRC_DIR}/deploy/install.sh --update"
 if grep -q '^SMTP_USER=.\+' "$KIRIM_ENV" && grep -q '^SMTP_PASS=.\+' "$KIRIM_ENV"; then
-  echo "    Kirim     : aktif -> ${MAIL_TO}"
+  echo "    Kirim     : aktif -> ${MAIL_TO}  (uji login: sudo bash ${SRC_DIR}/deploy/install.sh --cek-smtp)"
+  if [[ "$SET_SMTP" == "1" ]]; then echo; info "Menguji login akun pengirim..."; cek_smtp || true; fi
 else
   warn "Tombol Kirim belum aktif. Atur akun Gmail pengirim: sudo bash ${SRC_DIR}/deploy/install.sh --update --smtp"
 fi

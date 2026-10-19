@@ -24,8 +24,9 @@ const cfg = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '465', 10),
   secure: !/^(0|false|no)$/i.test(process.env.SMTP_SECURE || 'true'),
-  user: process.env.SMTP_USER || '',
-  pass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
+  // Buang spasi/karakter tak terlihat (mis. ikut tertempel) dan tanda kutip di tepi.
+  user: (process.env.SMTP_USER || '').replace(/[\s​-‍﻿]+/g, '').replace(/^["']|["']$/g, ''),
+  pass: (process.env.SMTP_PASS || '').replace(/[\s​-‍﻿]+/g, '').replace(/^["']|["']$/g, ''),
   to: process.env.MAIL_TO || 'terimasoal@sman2makassar.sch.id',
   fromName: process.env.MAIL_FROM_NAME || 'Konver Soal',
   listenPort: parseInt(process.env.PORT || '3091', 10),
@@ -207,6 +208,38 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+
+// ---------- Mode cek: node kirim.js --cek  (uji login SMTP tanpa mengirim email) ----------
+if (process.argv.includes('--cek')) {
+  const show = s => (s ? s.length + ' karakter' : '(kosong)');
+  console.log('Server SMTP   : ' + cfg.host + ':' + cfg.port + (cfg.secure ? ' (TLS)' : ''));
+  console.log('Pengirim      : "' + cfg.user + '"');
+  console.log('Sandi         : ' + show(cfg.pass) + (cfg.pass && !/^[a-z]{16}$/.test(cfg.pass)
+    ? '  <- App Password Google biasanya tepat 16 huruf kecil a-z' : (cfg.pass ? '  (format App Password OK)' : '')));
+  console.log('Penerima      : ' + cfg.to);
+  const sock = tls.connect(cfg.port, cfg.host, { servername: cfg.host });
+  let buf = '', step = 0;
+  const send = l => sock.write(l + '\r\n');
+  sock.on('data', d => {
+    buf += d.toString();
+    if (!/\r\n$/.test(buf) || !/^\d{3} /m.test(buf.split('\r\n').slice(-2)[0] || '')) return;
+    const resp = buf.trim(); buf = '';
+    const code = resp.split('\n').pop().slice(0, 3);
+    if (step === 0) { step = 1; send('EHLO cek'); }
+    else if (step === 1) { step = 2; send('AUTH LOGIN'); }
+    else if (step === 2) { step = 3; send(Buffer.from(cfg.user).toString('base64')); }
+    else if (step === 3) { step = 4; send(Buffer.from(cfg.pass).toString('base64')); }
+    else if (step === 4) {
+      console.log(code === '235' ? '\nHASIL: LOGIN BERHASIL - tombol Kirim siap dipakai.'
+        : '\nHASIL: LOGIN DITOLAK Google: ' + resp.split('\n').pop() +
+          '\n  -> Pastikan memakai App Password (bukan sandi akun) yang dibuat SETELAH sandi akun terakhir diganti,' +
+          '\n     Verifikasi 2 Langkah aktif, dan alamat pengirim benar.');
+      send('QUIT'); sock.end(); process.exitCode = code === '235' ? 0 : 1;
+    }
+  });
+  sock.on('error', e => { console.log('\nHASIL: tidak bisa terhubung ke ' + cfg.host + ': ' + e.message); process.exitCode = 1; });
+  return;
+}
 
 server.listen(cfg.listenPort, cfg.listenHost, () => {
   log('Layanan kirim soal aktif di http://' + cfg.listenHost + ':' + cfg.listenPort + ' -> ' + cfg.to +
