@@ -256,7 +256,13 @@
     el.dataset.id = q.id;
     el.id = 'q' + q.id;
     const stemItems = q.stem.length ? q.stem : [[]];
-    let stemHtml = stemItems.map(p => (isTable(p) ? tableHtml(p.table) : '<div>' + (segsToHtml(p) || '<br>') + '</div>')).join('');
+    // Jarak tab = label terpanjang (seperti tab stop di RTF), agar kolom nilai di preview juga rata.
+    const tabLabel = Math.max(0, ...stemItems.filter(p => !isTable(p)).map(p => {
+      const t = Segs.text(p);
+      return t.includes('\t') ? t.split('\t')[0].length : 0;
+    }));
+    const tabStyle = tabLabel ? ' style="tab-size:' + (tabLabel + 3) + 'ch"' : '';
+    let stemHtml = stemItems.map(p => (isTable(p) ? tableHtml(p.table) : '<div' + tabStyle + '>' + (segsToHtml(p) || '<br>') + '</div>')).join('');
     if (isTable(stemItems[stemItems.length - 1])) stemHtml += '<div><br></div>'; // tempat kursor setelah tabel
     let body = '<div class="q-head">' +
       '<span class="q-num">' + n + '.</span>' +
@@ -272,7 +278,7 @@
       body += '<ol class="opts">' + q.options.map((o, i) => {
         const L = letter(i);
         return '<li class="opt"><button class="key' + (q.answer === L ? ' on' : '') + '" data-act="key" data-i="' + i + '" title="Jadikan kunci">' + L.toLowerCase() + '</button>' +
-          '<div class="edit" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + segsToHtml(o) + '</div>' +
+          '<div class="edit' + (/\n/.test(Segs.text(o)) ? ' multi' : '') + '" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + segsToHtml(o) + '</div>' +
           '<button class="icon-btn del" data-act="rmopt" data-i="' + i + '" title="Hapus opsi">' + ICON.x + '</button></li>';
       }).join('') + '</ol>' +
         '<div class="q-foot"><button class="link-btn" data-act="addopt">+ Opsi</button>' +
