@@ -159,7 +159,30 @@
       body.push('{\\listtext\\pard\\plain' + base + ' ' + label + '\\tab}\\pard\\plain\\ql\\sa0\\sl240\\slmult1\\fi-360\\li' + indent +
         '\\lin' + indent + '\\ls' + ls + '\\ilvl0' + base + ' ' + content + '\\par');
 
+    // Baris soal bertab yang berurutan (mis. "Kas<tab>Rp.5.000.000") mendapat tab stop yang sama
+    // agar kolom nilainya rata, dihitung dari isi terpanjang tiap kolom.
+    const tabStopsFor = stem => {
+      const stops = new Array(stem.length).fill('');
+      const textOf = p => (Array.isArray(p) ? p.map(s => (s.img ? '￼' : s.t)).join('') : '');
+      let k = 1;
+      while (k < stem.length) {
+        if (!textOf(stem[k]).includes('\t') || RE_SUB.test(textOf(stem[k]))) { k++; continue; }
+        let e = k;
+        while (e + 1 < stem.length && textOf(stem[e + 1]).includes('\t') && !RE_SUB.test(textOf(stem[e + 1]))) e++;
+        const widths = [];
+        for (let j = k; j <= e; j++) {
+          textOf(stem[j]).split('\t').slice(0, -1).forEach((c, ci) => { widths[ci] = Math.max(widths[ci] || 0, c.length); });
+        }
+        let x = 360;
+        const tx = widths.map(len => { x = Math.min(9000, x + Math.max(720, len * 115 + 360)); return '\\tx' + x; }).join('');
+        for (let j = k; j <= e; j++) stops[j] = tx;
+        k = e + 1;
+      }
+      return stops;
+    };
+
     const stemParas = (q, ls, n) => {
+      const stops = tabStopsFor(q.stem);
       q.stem.forEach((p, k) => {
         if (p.table) {
           if (k === 0) listPara(ls, n + '.', 360, '');
@@ -179,7 +202,7 @@
           const rest = [Object.assign({}, first, { t: first.t.slice(m[0].length) })].concat(p.slice(1));
           para('\\fi-360\\li720\\lin720\\tx720', esc(m[1]) + '\\tab ' + runs(rest));
         } else {
-          para('\\li360\\lin360' + (imageOnly ? '\\sb60\\sa60' : ''), runs(p));
+          para('\\li360\\lin360' + stops[k] + (imageOnly ? '\\sb60\\sa60' : ''), runs(p));
         }
       });
       if (!q.stem.length) listPara(ls, n + '.', 360, '');

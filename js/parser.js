@@ -58,6 +58,30 @@
       }
       return merged;
     },
+    /**
+     * Untuk teks soal: seperti tidy, tetapi deretan tab di tengah baris menjadi satu tab
+     * (daftar "Nama akun<tab>Rp..." disejajarkan dengan satu tab stop saat ekspor).
+     */
+    tidyTabs(segs) {
+      const marked = segs.map(s => (s.img ? s : Object.assign({}, s, {
+        t: s.t.replace(/[  ]*\t[\s ]*/g, '\u0009').replace(/[^\S\t]+/g, ' '),
+      })));
+      const out = Segs.tidy(marked.map(s => (s.img ? s : Object.assign({}, s, { t: s.t.replace(/\t/g, '\u0001') }))));
+      // \u0001 = tab sementara (agar tidak ikut dirapikan jadi spasi); gabungkan yang berurutan
+      let prevTab = false;
+      const res = [];
+      for (const s of out) {
+        if (s.img) { res.push(s); prevTab = false; continue; }
+        let t = s.t.replace(/ ?\u0001[\u0001 ]*/g, '\t');
+        if (prevTab) t = t.replace(/^[\t ]+/, '');
+        if (!t) continue;
+        prevTab = /\t$/.test(t);
+        res.push(Object.assign({}, s, { t }));
+      }
+      if (res.length && !res[0].img) res[0] = Object.assign({}, res[0], { t: res[0].t.replace(/^\t+/, '') });
+      if (res.length && !res[res.length - 1].img) res[res.length - 1] = Object.assign({}, res[res.length - 1], { t: res[res.length - 1].t.replace(/\t+$/, '') });
+      return res.filter(s => s.img || s.t);
+    },
     /** Seperti tidy, tetapi baris baru dan tab dipertahankan (opsi jurnal debit/kredit). */
     tidyLines(segs) {
       let out = segs.map(s => (s.img ? s : Object.assign({}, s, { t: s.t.replace(/[  ]+/g, ' ').replace(/ *\n */g, '\n') })));
@@ -594,7 +618,7 @@
 
     const clean = s => Segs.tidy(s.map(x => (x.mark ? Object.assign({}, x, { mark: false }) : x)));
     const stem = q.stem
-      .map(p => (isTable(p) ? p : clean(p.segs)))
+      .map(p => (isTable(p) ? p : Segs.tidyTabs(p.segs.map(x => (x.mark ? Object.assign({}, x, { mark: false }) : x)))))
       .filter(s => isTable(s) || !Segs.isEmpty(s));
     const options = opts.map((o, i) => (q.options[i] && q.options[i].multi
       ? Segs.tidyLines(o.segs.map(x => (x.mark ? Object.assign({}, x, { mark: false }) : x)))

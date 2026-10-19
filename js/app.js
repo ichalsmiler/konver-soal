@@ -166,7 +166,7 @@
       }
     })(rootEl, {});
     return paras
-      .map(p => (isTable(p) ? p : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
+      .map(p => (isTable(p) ? p : keepLines === 'tabs' ? Segs.tidyTabs(p) : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
       .filter(p => isTable(p) || !Segs.isEmpty(p));
   }
 
@@ -408,7 +408,7 @@
     const q = qOf(t);
     if (!q) return;
     const f = t.dataset.field;
-    if (f === 'stem') q.stem = htmlToParas(t);
+    if (f === 'stem') q.stem = htmlToParas(t, 'tabs');
     else if (f === 'opt') {
       const i = parseInt(t.dataset.i, 10);
       // Opsi berbaris ganda (jurnal debit/kredit): baris baru & tab dipertahankan.

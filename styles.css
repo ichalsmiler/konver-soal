@@ -171,7 +171,7 @@ details summary { cursor: pointer; font-size: 14px; }
 .edit:focus { border-color: var(--accent); background: var(--bg); outline: none; }
 .edit img { max-width: 100%; height: auto; vertical-align: middle; }
 .edit .ph { display: inline-block; padding: 6px 10px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 4px; font: 12px system-ui, sans-serif; color: var(--muted); }
-.stem > div { min-height: 1.5em; }
+.stem > div { min-height: 1.5em; white-space: pre-wrap; tab-size: 13em; }
 .tbl { border-collapse: collapse; margin: 6px 0; max-width: 100%; font-size: 15px; }
 .tbl td { border: 1px solid var(--muted); padding: 3px 8px; vertical-align: middle; min-width: 2.5em; }
 .stem { overflow-x: auto; }

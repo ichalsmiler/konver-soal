@@ -106,6 +106,8 @@ Yang dilakukan skrip:
 - Opsi yang berupa gambar daftar "A. … E." (hasil screenshot) dipotong otomatis menjadi 5 gambar opsi,
   tanpa OCR sehingga simbol (√, pangkat, derajat) tetap persis. Bila soal dan opsi ada dalam satu gambar,
   bagian soal dan opsinya dipisah. Bila bentuknya tidak meyakinkan, gambar dibiarkan utuh.
+- Daftar di dalam soal yang disejajarkan dengan tab (mis. "Kas<tab><tab>Rp.5.000.000,-") tetap rata:
+  deretan tab digabung dan baris-baris itu diberi tab stop yang sama sesuai isi terpanjang.
 - Opsi berbaris ganda seperti jurnal akuntansi (akun debit, lalu akun kredit yang menjorok, 2–4 baris)
   tetap satu opsi; baris baru dan tab dipertahankan sehingga susunan jurnalnya sama dengan aslinya.
 - Tabel opsi berjudul kolom (mis. kertas kerja Akun | D | K) dengan baris a.–e.: tiap opsi menjadi
