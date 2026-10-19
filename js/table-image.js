@@ -152,7 +152,13 @@
     }
     const sum = a => a.reduce((x, y) => x + y, 0);
     let widths;
-    if (sum(natW) <= MAX_W) widths = natW.slice();
+    const orig = (table.widths || []).slice(0, ncol);
+    if (table.fixedWidths && orig.length === ncol && orig.every(w => w > 0)) {
+      // Lebar kolom asli (twips) agar beberapa tabel opsi tampil seragam.
+      const px = orig.map(w => w / 15);
+      const k = Math.min(1, MAX_W / sum(px));
+      widths = px.map((w, i) => Math.max(Math.floor(w * k), minW[i]));
+    } else if (sum(natW) <= MAX_W) widths = natW.slice();
     else if (sum(minW) >= MAX_W) widths = minW.slice();
     else {
       const extra = MAX_W - sum(minW);

@@ -65,12 +65,28 @@
     }
   }
 
+  /** Opsi berupa tabel kecil (judul kolom + baris opsi) dari parser -> gambar PNG. */
+  async function renderOptionTables(questions) {
+    for (const q of questions) {
+      let done = false;
+      for (const o of q.options) {
+        for (let k = 0; k < o.length; k++) {
+          const s = o[k];
+          if (!s.img || s.img.type !== 'table') continue;
+          try { o[k] = { img: await TableImage.render(s.img.table) }; done = true; } catch (e) { console.error(e); }
+        }
+      }
+      if (done) q.notes.push('Opsi diambil dari tabel (judul kolom + baris opsi) sebagai gambar');
+    }
+  }
+
   async function processLines(lines, name) {
     const res = ExamParser.parse(lines, { optCount: cfg().optCount });
     if (!res.questions.length) {
       showError('Tidak ada soal yang terdeteksi. Pastikan setiap soal diawali nomor (mis. "1.") dan opsi diawali huruf (a., b., ...).');
       return;
     }
+    await renderOptionTables(res.questions);
     await splitOptionImages(res.questions, cfg().optCount);
     state.questions = res.questions.map(q => Object.assign({ id: ++uid }, q));
     state.ignored = res.ignored;
@@ -121,7 +137,7 @@
   }
 
   const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|UL|OL|TABLE|TR)$/;
-  function htmlToParas(rootEl) {
+  function htmlToParas(rootEl, keepLines) {
     const paras = [[]];
     const cur = () => paras[paras.length - 1];
     const brk = () => { if (cur().length) paras.push([]); };
@@ -150,7 +166,7 @@
       }
     })(rootEl, {});
     return paras
-      .map(p => (isTable(p) ? p : Segs.tidy(p)))
+      .map(p => (isTable(p) ? p : keepLines ? Segs.tidyLines(p) : Segs.tidy(p)))
       .filter(p => isTable(p) || !Segs.isEmpty(p));
   }
 
@@ -394,8 +410,12 @@
     const f = t.dataset.field;
     if (f === 'stem') q.stem = htmlToParas(t);
     else if (f === 'opt') {
-      const paras = htmlToParas(t).filter(p => !isTable(p));
-      q.options[parseInt(t.dataset.i, 10)] = Segs.tidy(paras.reduce((a, p, k) => a.concat(k ? [{ t: ' ' }] : [], p), []));
+      const i = parseInt(t.dataset.i, 10);
+      // Opsi berbaris ganda (jurnal debit/kredit): baris baru & tab dipertahankan.
+      const multi = /\n/.test(Segs.text(q.options[i] || []));
+      const paras = htmlToParas(t, multi).filter(p => !isTable(p));
+      const joined = paras.reduce((a, p, k) => a.concat(k ? [{ t: multi ? '\n' : ' ' }] : [], p), []);
+      q.options[i] = multi ? Segs.tidyLines(joined) : Segs.tidy(joined);
     } else if (f === 'essay') q.answer = t.value;
     else return;
     refreshMeta(q);

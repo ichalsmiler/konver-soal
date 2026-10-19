@@ -58,6 +58,28 @@
       }
       return merged;
     },
+    /** Seperti tidy, tetapi baris baru dan tab dipertahankan (opsi jurnal debit/kredit). */
+    tidyLines(segs) {
+      let out = segs.map(s => (s.img ? s : Object.assign({}, s, { t: s.t.replace(/[  ]+/g, ' ').replace(/ *\n */g, '\n') })));
+      while (out.length && !out[0].img) {
+        const t = out[0].t.replace(/^\s+/, '');
+        if (t) { out[0] = Object.assign({}, out[0], { t }); break; }
+        out.shift();
+      }
+      while (out.length && !out[out.length - 1].img) {
+        const last = out[out.length - 1];
+        const t = last.t.replace(/\s+$/, '');
+        if (t) { out[out.length - 1] = Object.assign({}, last, { t }); break; }
+        out.pop();
+      }
+      const merged = [];
+      for (const s of out) {
+        const p = merged[merged.length - 1];
+        if (p && !p.img && !s.img && sameFmt(p, s)) p.t += s.t;
+        else merged.push(s.img ? s : Object.assign({}, s));
+      }
+      return merged;
+    },
     isEmpty(segs) {
       return !segs.some(s => s.img || /\S/.test(s.t));
     },
@@ -173,7 +195,8 @@
     const lm = /^\(?([A-Za-z])\)?(?:[.)]|\s|$)/.exec(v);
     if (lm) return { letter: lm[1].toUpperCase() };
     const norm = s => s.toLowerCase().replace(/[\s\W_]+/g, ' ').trim();
-    const idx = cur.options.findIndex(o => norm(Segs.text(o.segs)) === norm(v));
+    // Kunci kosong ("Ans :") jangan dicocokkan dengan opsi tanpa teks (opsi gambar).
+    const idx = norm(v) ? cur.options.findIndex(o => norm(Segs.text(o.segs)) === norm(v)) : -1;
     if (idx >= 0) return { letter: letter(idx) };
     return { letter: null, raw: v };
   }
@@ -190,6 +213,28 @@
     let m;
     while ((m = re.exec(all))) map.set(parseInt(m[1], 10), m[2].toUpperCase());
     return map;
+  }
+
+  /**
+   * Baris teks setelah sebuah opsi adalah lanjutan opsi itu bila baris berikutnya
+   * adalah opsi huruf selanjutnya atau baris kunci (bukan opsi "a" milik soal baru).
+   */
+  function continuesOption(queue, cur) {
+    if (cur.type !== 'mc' || !cur.options.length) return false;
+    // Lewati baris lanjutan lain (jurnal majemuk 3–4 baris) sampai bertemu penanda yang jelas.
+    let seen = 0;
+    for (const nx of queue) {
+      if (nx.table) return false;
+      const t = Segs.text(nx.segs || []).replace(/ /g, ' ').trim();
+      if (!t) continue;
+      if (matchAnswer(t, cur)) return true;
+      if (nx.auto && LETTER_FMTS.has(nx.auto.fmt)) return nx.auto.n === cur.options.length + 1;
+      if (nx.auto) return false;
+      const m = RE_OPT.exec(t);
+      if (m) return (m[1] || m[2]).toLowerCase() === String.fromCharCode(97 + cur.options.length);
+      if (RE_QNUM.test(t) || ++seen > 8) return false;
+    }
+    return false;
   }
 
   // ---------- Tabel ----------
@@ -237,6 +282,49 @@
       out.push(joinWith(parts, '; '));
     }
     return out;
+  }
+
+  /**
+   * Tabel opsi berjudul kolom (mis. kertas kerja: Akun | D | K ...), opsi a–e berupa
+   * baris-baris di bawah judul, atau bertumpuk sebagai paragraf dalam satu baris.
+   * Tiap opsi menjadi tabel kecil (judul + baris opsinya) yang nanti digambar jadi PNG.
+   */
+  function optionTables(table, cur) {
+    const rows = table.rows;
+    const expect = k => String.fromCharCode(97 + cur.options.length + k);
+    const isLabel = (txt, k) => { const m = /^\(?([A-Za-z])\s*[.)]?$/.exec(txt.trim()); return !!m && m[1].toLowerCase() === expect(k); };
+    const cellLines = c => {
+      const ls = c.lines.filter(l => !l.table).map(l => Segs.tidy(withLabel(l)));
+      while (ls.length && Segs.isEmpty(ls[ls.length - 1])) ls.pop();
+      return ls;
+    };
+    const build = (headRows, optRows) => {
+      // Kolom label (A/B/...) dibuang bila judulnya kosong.
+      const dropFirst = headRows.every(r => r[0] && (r[0].span || 1) === 1 && !cellParas(r[0]).length);
+      const head = headRows.map(r => (dropFirst ? r.slice(1) : r).map(c => ({ paras: cellParas(c), span: c.span || 1, vm: c.vm || null })));
+      const widths = dropFirst ? (table.widths || []).slice(1) : (table.widths || []);
+      return optRows.map(cells => [{ img: { type: 'table', table: { widths, fixedWidths: true, rows: head.concat([dropFirst ? cells.slice(1) : cells]) } } }]);
+    };
+
+    // a) Baris-baris berlabel a., b., ... setelah baris judul
+    for (let h = 1; h < rows.length - 1; h++) {
+      const optRows = rows.slice(h);
+      if (optRows.length >= 2 && optRows.every((r, k) => r.length >= 2 && isLabel(cellText(r[0]), k))) {
+        return build(rows.slice(0, h), optRows.map(r => r.map(c => ({ paras: cellParas(c), span: c.span || 1, vm: null }))));
+      }
+    }
+    // b) Satu baris yang selnya berisi paragraf a., b., ... bertumpuk
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (row.length < 2) continue;
+      const labels = cellLines(row[0]).map(s => Segs.text(s));
+      if (labels.length < 2 || !labels.every((t, k) => isLabel(t, k))) continue;
+      const cols = row.map(cellLines);
+      if (cols.some(ls => ls.length > labels.length)) continue;
+      const optRows = labels.map((_, k) => row.map((c, ci) => ({ paras: cols[ci][k] && !Segs.isEmpty(cols[ci][k]) ? [cols[ci][k]] : [], span: c.span || 1, vm: null })));
+      return build(rows.slice(0, r), optRows);
+    }
+    return null;
   }
 
   function stemTable(table) {
@@ -301,7 +389,7 @@
         const t = ln.table;
         if (mode === 'q' && cur && !cur.flags.answerSeen) {
           if (cur.type === 'mc' && cur.options.length === 0) {
-            const opts = optionRows(t, cur);
+            const opts = optionRows(t, cur) || optionTables(t, cur);
             if (opts) { for (const s of opts) cur.options.push({ segs: s }); continue; }
           }
           if (cur.type === 'essay' || cur.options.length === 0) {
@@ -411,6 +499,11 @@
         } else cur.stem.push(para);
       } else if (cur.options.length === 0 && !cur.flags.answerSeen) {
         cur.stem.push(para);
+      } else if (!cur.flags.answerSeen && continuesOption(queue, cur)) {
+        // Baris lanjutan opsi (mis. akun kredit pada jurnal): jadi baris baru di opsi yang sama.
+        const last = cur.options[cur.options.length - 1];
+        last.segs = last.segs.concat([{ t: '\n' }], para.segs);
+        last.multi = true;
       } else if (cur.options.length >= 2 || cur.flags.answerSeen) {
         newQ(null, null, null);
         cur.stem.push(para);
@@ -503,7 +596,9 @@
     const stem = q.stem
       .map(p => (isTable(p) ? p : clean(p.segs)))
       .filter(s => isTable(s) || !Segs.isEmpty(s));
-    const options = opts.map(o => clean(o.segs));
+    const options = opts.map((o, i) => (q.options[i] && q.options[i].multi
+      ? Segs.tidyLines(o.segs.map(x => (x.mark ? Object.assign({}, x, { mark: false }) : x)))
+      : clean(o.segs)));
 
     if (!stem.length && !options.length) return null;
     if (q.flags.badAnswer != null && q.answer == null) {

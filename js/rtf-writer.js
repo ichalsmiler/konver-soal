@@ -65,9 +65,11 @@
     return '{\\pict' + kind + '\\picw' + pw + '\\pich' + ph + '\\picwgoal' + w + '\\pichgoal' + h + '\n' + b64ToHex(img.b64) + '}';
   }
 
-  function runs(segs) {
+  function runs(segs, isOption) {
     let o = '';
     const withText = segs.some(s => !s.img && /\S/.test(s.t || ''));
+    // Opsi yang hanya berisi gambar tinggi (foto, tabel opsi): huruf a./b. sejajar tengah gambar.
+    const centerOption = isOption && !withText;
     for (const s of segs) {
       if (s.img) {
         // Persamaan (dari WMF/EMF) yang sebaris dengan teks diturunkan agar tengahnya sejajar teks.
@@ -75,7 +77,7 @@
         // Persamaan Word (OMML): bagian di bawah garis dasar diketahui persis, juga sejajar dengan huruf opsi.
         if (s.img.fromMath && s.img.depth > 10) {
           o += '{\\dn' + Math.round(s.img.depth / 10) + ' ' + pict(s.img) + '}';
-        } else if (withText && s.img.fromMetafile && hPt > 14) {
+        } else if ((withText && s.img.fromMetafile && hPt > 14) || (centerOption && !s.img.fromMath && hPt > 18)) {
           o += '{\\dn' + Math.round((hPt / 2 - 4) * 2) + ' ' + pict(s.img) + '}';
         } else o += pict(s.img);
         continue;
@@ -196,7 +198,7 @@
       if (q.type === 'mc') {
         const i = nMc++;
         stemParas(q, 1, i + 1);
-        q.options.forEach((o, k) => listPara(3 + i, String.fromCharCode(97 + k) + '.', 720, runs(o)));
+        q.options.forEach((o, k) => listPara(3 + i, String.fromCharCode(97 + k) + '.', 720, runs(o, true)));
       } else {
         stemParas(q, 2, ++nEssay);
       }
