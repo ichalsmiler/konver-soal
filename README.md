@@ -100,6 +100,9 @@ Yang dilakukan skrip:
   menjadi satu gambar agar label tetap sejajar dengan gambarnya.
 - Gambar WMF/EMF (mis. persamaan Microsoft Equation 3.0 / MathType) diubah menjadi PNG yang tajam dan kecil,
   sehingga tampil di preview dan di aplikasi CBT. Persamaan sebaris diturunkan agar sejajar dengan teks.
+- Persamaan bawaan Word (Equation/OMML) digambar menjadi PNG kecil (±1 KB, grayscale) dengan pecahan, akar,
+  pangkat, indeks, matriks, kurung, integral/sigma, dan fungsi tetap utuh. Garis dasarnya disejajarkan dengan
+  teks dan huruf opsi. Bila gambar gagal dibuat, persamaan menjadi teks biasa dan soalnya ditandai.
 - Opsi yang berupa gambar daftar "A. … E." (hasil screenshot) dipotong otomatis menjadi 5 gambar opsi,
   tanpa OCR sehingga simbol (√, pangkat, derajat) tetap persis. Bila soal dan opsi ada dalam satu gambar,
   bagian soal dan opsinya dipisah. Bila bentuknya tidak meyakinkan, gambar dibiarkan utuh.
@@ -110,7 +113,9 @@ Yang dilakukan skrip:
 ## Batasan
 
 - File `.doc` (Word 97–2003) dan `.rtf` belum didukung sebagai input. Simpan dulu sebagai `.docx`.
-- Persamaan bawaan Word (Equation/OMML) diubah menjadi teks biasa. Sebaiknya rumus dan tulisan Arab berupa gambar.
+- Persamaan OMML digambar oleh browser (MathML, font Cambria Math), jadi butuh browser yang mendukung MathML
+  (Chrome/Edge 109+, Firefox, Safari). Persamaan di dalam kotak teks shape tetap berupa teks.
+- Tulisan Arab sebaiknya berupa gambar.
 
 ## Struktur
 
@@ -124,6 +129,7 @@ Yang dilakukan skrip:
 - `lib/jszip.min.js`: JSZip 3.10.1 (MIT)
 - `lib/WMFJS.bundle.min.js`, `lib/EMFJS.bundle.min.js`: perender WMF/EMF dari rtf.js 3.0.9 (MIT, lihat `lib/rtf.js-LICENSE.txt`)
 - `js/metafile-image.js`: mengubah WMF/EMF menjadi PNG
+- `js/omml-image.js`: mengubah persamaan Word (OMML) ke MathML lalu ke PNG
 - `js/option-split.js`: memotong gambar daftar opsi menjadi opsi a–e
 - `contoh-berantakan.docx`: contoh file soal berantakan untuk dicoba
 - `deploy/install.sh`: installer Ubuntu Server (nginx)

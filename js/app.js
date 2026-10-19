@@ -104,7 +104,9 @@
         const id = regImg(s.img);
         if (s.img.type === 'png' || s.img.type === 'jpeg') {
           const w = Math.round((s.img.w || 1500) / 15);
-          return '<img data-img="' + id + '" src="data:image/' + s.img.type + ';base64,' + s.img.b64 + '" style="width:' + w + 'px" alt="">';
+          // Persamaan Word: garis dasarnya disejajarkan dengan teks.
+          const va = s.img.fromMath ? ';vertical-align:-' + Math.round(s.img.depth / 15) + 'px' : '';
+          return '<img data-img="' + id + '" src="data:image/' + s.img.type + ';base64,' + s.img.b64 + '" style="width:' + w + 'px' + va + '" alt="">';
         }
         return '<span class="ph" contenteditable="false" data-img="' + id + '">Gambar ' + s.img.type.toUpperCase() + '</span>';
       }

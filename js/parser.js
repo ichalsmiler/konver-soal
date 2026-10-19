@@ -66,7 +66,7 @@
     },
     /** true bila seluruh teks bermuatan pada segs memiliki properti `key`. */
     allHave(segs, key) {
-      const ts = segs.filter(s => !s.img && /\S/.test(s.t));
+      const ts = segs.filter(s => (s.img ? s.fmtMath : /\S/.test(s.t))); // gambar persamaan membawa format run-nya
       return ts.length > 0 && ts.every(s => s[key]);
     },
     /** Ganti teks di awal/akhir (regex harus berjangkar ^ atau $). */
@@ -512,7 +512,7 @@
     if (q.flags.drawing) notes.push('Ilustrasi shape Word diubah menjadi gambar — mohon dicek');
     if (q.flags.pictures) notes.push('Gambar berlabel (A, B, ...) digabung jadi satu gambar agar label tetap sejajar');
     if (q.flags.legacy) notes.push('Ada shape Word lama (VML) yang tidak ikut terbaca — ganti dengan gambar');
-    if (q.flags.math) notes.push('Ada persamaan Word, diubah jadi teks biasa — sebaiknya pakai gambar');
+    if (q.flags.math) notes.push('Ada persamaan Word yang tidak bisa dijadikan gambar, diubah jadi teks biasa — mohon dicek');
     if (q.flags.arabic) notes.push('Ada tulisan Arab — sesuai ketentuan sebaiknya pakai gambar');
     return {
       type: q.type,

@@ -372,6 +372,7 @@
         let cur = [];
         for (const s of segs) {
           if (s === BREAK) { out.push(para()); cur = []; }
+          else if (s.omml) cur.push({ t: s.mathText, i: true, sz: props.sz, font: props.font }); // persamaan di kotak teks tetap teks
           else if (!('img' in s) && !s.scene) cur.push(Object.assign({ sz: props.sz, font: props.font }, s));
         }
         out.push(para());
@@ -526,17 +527,47 @@
           case 'fldSimple': case 'bdo': case 'dir':
             walkInline(c, out, ctx); break;
           case 'sdt': walkInline(kid(c, 'sdtContent'), out, ctx); break;
-          case 'oMath': case 'oMathPara': {
-            ctx.math = true;
-            const ts = c.getElementsByTagNameNS('*', 't');
-            let s = '';
-            for (const t of ts) s += t.textContent;
-            if (s) out.push({ t: s, i: true });
+          case 'oMath': mathSeg(c, out, false); break;
+          case 'oMathPara':
+            kids(c, 'oMath').forEach((m, k) => { if (k) out.push(BREAK); mathSeg(m, out, true); });
             break;
-          }
           default: break;
         }
       }
+    }
+
+    // Persamaan Word: tempat gambar yang diisi renderMath(); teksnya disimpan sebagai cadangan.
+    function mathSeg(m, out, block) {
+      let text = '';
+      for (const t of m.getElementsByTagNameNS('*', 't')) text += t.textContent;
+      if (!text.trim()) return;
+      const seg = { img: null, omml: m, mathText: text, mathBlock: block, fmtMath: true };
+      // Warna/stabilo/tebal seluruh persamaan tetap terbaca sebagai tanda kunci.
+      const fmts = Array.from(m.getElementsByTagNameNS(m.namespaceURI, 'r'))
+        .map(r => runFmt(kids(r, 'rPr').find(e => e.namespaceURI !== m.namespaceURI)));
+      for (const k of ['mark', 'b']) if (fmts.length && fmts.every(f => f[k])) seg[k] = true;
+      out.push(seg);
+    }
+
+    /** Gambar semua persamaan; yang gagal kembali menjadi teks miring dan barisnya ditandai `math`. */
+    function renderMath(lines, jobs) {
+      for (const l of lines) {
+        if (l.table) { for (const r of l.table.rows) for (const c of r) renderMath(c.lines, jobs); continue; }
+        if (!l.segs.some(s => s.omml)) continue;
+        // Persamaan yang berdiri sendiri (mis. satu opsi) ditampilkan penuh seperti persamaan tampilan.
+        const rest = l.segs.filter(s => !s.omml).map(s => s.t || '').join('').replace(/^\s*\(?([a-eA-E]|\d{1,3})[.)]/, '');
+        const alone = !/\S/.test(rest);
+        for (const s of l.segs) {
+          if (!s.omml) continue;
+          const job = root.OmmlImage ? root.OmmlImage.render(s.omml, s.mathBlock || alone).catch(e => { console.warn(e); return null; }) : Promise.resolve(null);
+          jobs.push(job.then(img => {
+            if (img) s.img = img;
+            else { delete s.img; delete s.fmtMath; s.t = s.mathText; s.i = true; l.math = true; }
+            delete s.omml; delete s.mathText; delete s.mathBlock;
+          }));
+        }
+      }
+      return jobs;
     }
 
     function paragraph(p) {
@@ -739,6 +770,7 @@
     const entries = [];
     bodyEntries(body, entries);
     await Promise.all(pending);
+    await Promise.all(renderMath(entries.flatMap(e => e.lines), []));
     const lines = await buildBlocks(entries, page);
     await renderInlineScenes(lines);
     dropMissingImages(lines);

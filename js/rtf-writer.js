@@ -72,7 +72,10 @@
       if (s.img) {
         // Persamaan (dari WMF/EMF) yang sebaris dengan teks diturunkan agar tengahnya sejajar teks.
         const hPt = (s.img.h || 0) / 20;
-        if (withText && s.img.fromMetafile && hPt > 14) {
+        // Persamaan Word (OMML): bagian di bawah garis dasar diketahui persis, juga sejajar dengan huruf opsi.
+        if (s.img.fromMath && s.img.depth > 10) {
+          o += '{\\dn' + Math.round(s.img.depth / 10) + ' ' + pict(s.img) + '}';
+        } else if (withText && s.img.fromMetafile && hPt > 14) {
           o += '{\\dn' + Math.round((hPt / 2 - 4) * 2) + ' ' + pict(s.img) + '}';
         } else o += pict(s.img);
         continue;
