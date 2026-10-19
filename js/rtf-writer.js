@@ -67,8 +67,16 @@
 
   function runs(segs) {
     let o = '';
+    const withText = segs.some(s => !s.img && /\S/.test(s.t || ''));
     for (const s of segs) {
-      if (s.img) { o += pict(s.img); continue; }
+      if (s.img) {
+        // Persamaan (dari WMF/EMF) yang sebaris dengan teks diturunkan agar tengahnya sejajar teks.
+        const hPt = (s.img.h || 0) / 20;
+        if (withText && s.img.fromMetafile && hPt > 14) {
+          o += '{\\dn' + Math.round((hPt / 2 - 4) * 2) + ' ' + pict(s.img) + '}';
+        } else o += pict(s.img);
+        continue;
+      }
       if (!s.t) continue;
       let f = '';
       if (s.b) f += '\\b';

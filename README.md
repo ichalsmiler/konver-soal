@@ -98,6 +98,8 @@ Yang dilakukan skrip:
   tajam di zoom 100%; contoh: file RTF 6,1 MB menjadi ±0,9 MB. Bisa dimatikan lewat pengaturan "Kompres foto besar".
 - Deretan gambar dengan label huruf/angka di atas atau bawahnya (mis. "A  B  C" di atas foto) digabung
   menjadi satu gambar agar label tetap sejajar dengan gambarnya.
+- Gambar WMF/EMF (mis. persamaan Microsoft Equation 3.0 / MathType) diubah menjadi PNG yang tajam dan kecil,
+  sehingga tampil di preview dan di aplikasi CBT. Persamaan sebaris diturunkan agar sejajar dengan teks.
 - Opsi yang berupa gambar daftar "A. … E." (hasil screenshot) dipotong otomatis menjadi 5 gambar opsi,
   tanpa OCR sehingga simbol (√, pangkat, derajat) tetap persis. Bila soal dan opsi ada dalam satu gambar,
   bagian soal dan opsinya dipisah. Bila bentuknya tidak meyakinkan, gambar dibiarkan utuh.
@@ -120,5 +122,8 @@ Yang dilakukan skrip:
 - `js/drawing-render.js`: menggambar ilustrasi shape Word menjadi PNG
 - `js/app.js`: logika antarmuka dan editor
 - `lib/jszip.min.js`: JSZip 3.10.1 (MIT)
+- `lib/WMFJS.bundle.min.js`, `lib/EMFJS.bundle.min.js`: perender WMF/EMF dari rtf.js 3.0.9 (MIT, lihat `lib/rtf.js-LICENSE.txt`)
+- `js/metafile-image.js`: mengubah WMF/EMF menjadi PNG
+- `js/option-split.js`: memotong gambar daftar opsi menjadi opsi a–e
 - `contoh-berantakan.docx`: contoh file soal berantakan untuk dicoba
 - `deploy/install.sh`: installer Ubuntu Server (nginx)

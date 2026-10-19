@@ -240,6 +240,13 @@
       }
     }
     if (!img.w) { img.w = 2880; img.h = 2160; }
+    // WMF/EMF (persamaan Equation/MathType) -> PNG agar tampil di browser & aplikasi CBT.
+    if ((img.type === 'wmf' || img.type === 'emf') && root.MetafileImage) {
+      try {
+        const png = await root.MetafileImage.toPng(img);
+        if (png) return png;
+      } catch (e) { console.warn(e); }
+    }
     return img;
   }
 
