@@ -140,8 +140,9 @@
   const RE_OPT = /^\(?([A-Za-z])\s*[.)]\s*|^([A-Za-z])\t\s*/;
   const RE_ANS = /^(ans(?:wer)?|kunci(?:\s+jawaban)?|jawaban(?:\s+(?:yang\s+)?benar)?|jawab|jwb|key)\b\s*([:=.\-]?)\s*(.*)$/i;
   const RE_STEM_END = /(\.{3,}|…)\s*[?.]?\s*$/;
-  const RE_ANS_MARK_TAIL = /\s*(?:\*+|\((?:benar|kunci|jawaban|v)\)|[✓✔√])\s*$/i;
-  const RE_ANS_MARK_HEAD = /^\s*(?:\*+|[✓✔√])\s*/;
+  // √ hanya dianggap tanda centang bila berdiri sendiri; "√2", "√x" adalah akar.
+  const RE_ANS_MARK_TAIL = /(?:\s*(?:\*+|\((?:benar|kunci|jawaban|v)\)|[✓✔])|(?:^|\s+)√)\s*$/i;
+  const RE_ANS_MARK_HEAD = /^\s*(?:\*+|[✓✔]|√(?=\s|$))\s*/;
   const RE_ARABIC = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
 
   function sectionOf(text) {

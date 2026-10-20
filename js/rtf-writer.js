@@ -30,10 +30,34 @@
     0x21CC: '<=>', 0x21CB: '<=>', 0x21D2: '=>', 0x2032: "'", 0x2033: '"', 0x2219: '.', 0x22C5: '.', 0x2206: 'delta',
     0x0394: 'Delta', 0x03B1: 'alfa', 0x03B2: 'beta', 0x03B3: 'gamma', 0x03B4: 'delta', 0x03B8: 'theta',
     0x03BB: 'lambda', 0x03BC: 'mu', 0x03C0: 'pi', 0x03C1: 'rho', 0x03C3: 'sigma', 0x03C9: 'omega', 0x03A9: 'Ohm',
-    0x2070: '^0', 0x2074: '^4', 0x2075: '^5', 0x2076: '^6', 0x2077: '^7', 0x2078: '^8', 0x2079: '^9',
-    0x207A: '+', 0x207B: '-', 0x2080: '0', 0x2081: '1', 0x2082: '2', 0x2083: '3', 0x2084: '4', 0x2085: '5',
-    0x2086: '6', 0x2087: '7', 0x2088: '8', 0x2089: '9', 0x00A0: ' ', 0x2002: ' ', 0x2003: ' ', 0x2009: ' ', 0x200B: '',
+    0x00A0: ' ', 0x2002: ' ', 0x2003: ' ', 0x2009: ' ', 0x200B: '',
   };
+  // Angka/tanda superskrip & subskrip Unicode (H₂O, Fe³⁺) ditulis sebagai teks biasa berformat \super/\sub.
+  const SUPER = { 0x2070: '0', 0x2071: 'i', 0x2074: '4', 0x2075: '5', 0x2076: '6', 0x2077: '7', 0x2078: '8', 0x2079: '9',
+    0x207A: '+', 0x207B: '-', 0x207C: '=', 0x207D: '(', 0x207E: ')', 0x207F: 'n' };
+  const SUB = { 0x2080: '0', 0x2081: '1', 0x2082: '2', 0x2083: '3', 0x2084: '4', 0x2085: '5', 0x2086: '6', 0x2087: '7',
+    0x2088: '8', 0x2089: '9', 0x208A: '+', 0x208B: '-', 0x208C: '=', 0x208D: '(', 0x208E: ')' };
+
+  // Spasi/strip Unicode yang padanan teksnya tampil sama persis.
+  const SAME_AS_TEXT = [0x2212, 0x2010, 0x2011, 0x2012, 0x2015, 0x00A0, 0x2002, 0x2003, 0x2009, 0x200B, 0xFFFC];
+
+  /** true bila karakter bisa ditulis apa adanya (tanpa \uN) dan terbaca benar oleh pengimpor ujian. */
+  function isPlain(ch) {
+    const c = ch.codePointAt(0);
+    return c < 0x100 || !!CP1252[c] || !!SUPER[c] || !!SUB[c] || SAME_AS_TEXT.includes(c);
+  }
+
+  // Cadangan otomatis dari dekomposisi Unicode: ⅔ -> "2/3", ℃ -> "°C", ﬁ -> "fi".
+  // Hanya dipakai bila hasilnya bisa ditulis sebagai Latin-1/CP1252; selain itu "?".
+  function decompose(ch) {
+    const d = ch.normalize('NFKD').replace(/⁄/g, '/').replace(/[̀-ͯ]/g, '');
+    if (!d || d === ch) return '?';
+    for (const x of d) {
+      const c = x.charCodeAt(0);
+      if (x.length > 1 || (c >= 0x80 && c < 0xA0) || (c > 0xFF && !CP1252[c])) return '?';
+    }
+    return d;
+  }
 
   function esc(s) {
     let o = '';
@@ -47,13 +71,19 @@
       else if (c < 0x80) o += ch;
       else if (c >= 0xA0 && c <= 0xFF) o += "\\'" + c.toString(16);          // Latin-1: ° ± × ÷ ² ³ ½ é ...
       else if (CP1252[c]) o += "\\'" + CP1252[c].toString(16);                // – — … “ ” ‘ ’ • €
+      else if (SUPER[c] || SUB[c]) {
+        // Gabungkan deretan yang sejenis: CH₃₂ -> {\sub 32}.
+        const map = SUPER[c] ? SUPER : SUB;
+        let run = map[c];
+        while (i + 1 < s.length && map[s.charCodeAt(i + 1)]) run += map[s.charCodeAt(++i)];
+        o += '{' + (map === SUPER ? '\\super ' : '\\sub ') + esc(run) + '}';
+      }
       else {
-        // Unicode lain: \uN dengan cadangan yang terbaca (jumlah karakter cadangan via \ucN).
-        const fb = FALLBACK[c] != null ? FALLBACK[c] : '?';
-        // Spasi setelah \uN adalah pemisah kata kunci (bukan bagian cadangan), agar cadangan
-        // berupa angka/spasi tidak menempel ke kodenya.
-        const u = '\\u' + (c > 32767 ? c - 65536 : c) + ' ';
-        o += fb.length === 1 ? u + esc(fb) : '{\\uc' + fb.length + u + esc(fb) + '}';
+        // Unicode lain: pengimpor ujian (ExamView/Moodle) mengubah setiap \uN menjadi "?" dan
+        // tetap menampilkan cadangannya ("?<=>"), jadi bila ada padanan terbaca tulis padanannya saja.
+        const fb = FALLBACK[c] != null ? FALLBACK[c] : decompose(ch);
+        if (fb !== '?') { o += esc(fb); continue; }
+        o += '\\u' + (c > 32767 ? c - 65536 : c) + ' ?';
       }
     }
     return o;
@@ -114,6 +144,9 @@
         // Persamaan Word (OMML): bagian di bawah garis dasar diketahui persis, juga sejajar dengan huruf opsi.
         if (s.img.fromMath && s.img.depth > 10) {
           o += '{\\dn' + Math.round(s.img.depth / 10) + ' ' + pict(s.img) + '}';
+        } else if (s.img.fromMath && s.img.depth < -10) {
+          // Simbol superskrip yang dijadikan gambar: dinaikkan dari garis dasar.
+          o += '{\\up' + Math.round(-s.img.depth / 10) + ' ' + pict(s.img) + '}';
         } else if ((withText && s.img.fromMetafile && hPt > 14) || (centerOption && !s.img.fromMath && hPt > 18)) {
           o += '{\\dn' + Math.round((hPt / 2 - 4) * 2) + ' ' + pict(s.img) + '}';
         } else o += pict(s.img);
@@ -276,7 +309,7 @@
       body.join('\n') + '\n}';
   }
 
-  const api = { build, esc };
+  const api = { build, esc, isPlain };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RtfWriter = api;
 })(this);

@@ -602,6 +602,45 @@
     })));
   }
 
+  // ---------- Simbol jadi gambar ----------
+  // Pengimpor ujian mengubah karakter di luar Windows-1252 (⇌ ⅔ ≤ α √, tulisan Arab, ...) menjadi "?".
+  // Deretan karakter seperti itu digambar menjadi PNG kecil yang sejajar dengan teks.
+  async function withSymbolImages(questions, settings) {
+    const splitSeg = async s => {
+      if (s.img || !s.t || Array.from(s.t).every(RtfWriter.isPlain)) return [s];
+      const parts = [];
+      for (const ch of s.t) {
+        const sym = !RtfWriter.isPlain(ch);
+        const last = parts[parts.length - 1];
+        if (last && last.sym === sym) last.t += ch;
+        else parts.push({ t: ch, sym });
+      }
+      // "simbol spasi simbol" (mis. kata-kata Arab) jadi satu gambar agar urutannya tetap.
+      for (let k = 1; k + 1 < parts.length; k++) {
+        if (!parts[k].sym && parts[k - 1].sym && parts[k + 1].sym && /^[  ]+$/.test(parts[k].t)) {
+          parts[k - 1].t += parts[k].t + parts[k + 1].t;
+          parts.splice(k, 2);
+          k--;
+        }
+      }
+      return Promise.all(parts.map(async p => {
+        if (!p.sym) return Object.assign({}, s, { t: p.t });
+        const img = await SymbolImage.render(p.t, { font: settings.font || 'Times New Roman', size: settings.fontSize, b: s.b, i: s.i, sup: s.sup, sub: s.sub });
+        return img ? { img } : Object.assign({}, s, { t: p.t }); // gagal: teks cadangan dari RtfWriter
+      }));
+    };
+    const segs = async list => [].concat(...await Promise.all(list.map(splitSeg)));
+    const item = async p => {
+      if (!isTable(p)) return segs(p);
+      const rows = await Promise.all(p.table.rows.map(row => Promise.all(row.map(async c => Object.assign({}, c, { paras: await Promise.all(c.paras.map(segs)) })))));
+      return { table: Object.assign({}, p.table, { rows }) };
+    };
+    return Promise.all(questions.map(async q => Object.assign({}, q, {
+      stem: await Promise.all(q.stem.map(item)),
+      options: await Promise.all(q.options.map(segs)),
+    })));
+  }
+
   async function showTableImages(q) {
     const body = $('#imgDialogBody');
     body.innerHTML = '';
@@ -624,6 +663,7 @@
   async function buildRtf() {
     const settings = cfg();
     let questions = settings.tableImages ? await withTableImages(state.questions) : state.questions;
+    questions = await withSymbolImages(questions, settings);
     if (settings.compressPhotos) questions = await withCompressedPhotos(questions);
     if (settings.examView) questions = await withWmfFallbacks(questions);
     return RtfWriter.build(questions, settings);

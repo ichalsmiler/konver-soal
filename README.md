@@ -140,6 +140,9 @@ Yang dilakukan skrip:
 - Persamaan bawaan Word (Equation/OMML) digambar menjadi PNG kecil (±1 KB, grayscale) dengan pecahan, akar,
   pangkat, indeks, matriks, kurung, integral/sigma, dan fungsi tetap utuh. Garis dasarnya disejajarkan dengan
   teks dan huruf opsi. Bila gambar gagal dibuat, persamaan menjadi teks biasa dan soalnya ditandai.
+- Simbol yang tidak terbaca oleh pengimpor ujian (ExamView/Moodle mengubahnya menjadi "?"), mis. ⇌ ⅔ ≤ ≥ α π √ ℃
+  atau tulisan Arab, digambar menjadi PNG kecil seukuran teks dan sejajar garis dasarnya. Subskrip/superskrip
+  Unicode (H₂O, H₃O⁺) tetap teks berformat subscript/superscript.
 - Opsi yang berupa gambar daftar "A. … E." (hasil screenshot) dipotong otomatis menjadi 5 gambar opsi,
   tanpa OCR sehingga simbol (√, pangkat, derajat) tetap persis. Bila soal dan opsi ada dalam satu gambar,
   bagian soal dan opsinya dipisah. Bila bentuknya tidak meyakinkan, gambar dibiarkan utuh.
