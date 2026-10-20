@@ -11,10 +11,12 @@
     optCount: parseInt($('#cfgOpt').value, 10),
     mcTitle: $('#cfgTitle').value.trim() || 'Multiple choice',
     fontSize: parseInt($('#cfgSize').value, 10),
-    blankLine: $('#cfgBlank').checked,
-    tableImages: $('#cfgTblImg').checked,
-    compressPhotos: $('#cfgPhoto').checked,
-    examView: $('#cfgExamView').checked,
+    // Selalu aktif (pilihannya tidak ditampilkan): baris kosong antar soal, tabel jadi gambar,
+    // kompres foto besar, dan gambar kompatibel ExamView (disertai WMF).
+    blankLine: true,
+    tableImages: true,
+    compressPhotos: true,
+    examView: true,
   });
   const hasTable = q => q.stem.some(isTable);
 
@@ -677,10 +679,7 @@
     const hits = guruNames.filter(n => !q || fold(n).includes(q)).slice(0, 50);
     guruIdx = -1;
     list.innerHTML = hits.length
-      ? hits.map((n, i) => {
-        const mp = Array.from(new Set(GURU.filter(g => g.nama === n).map(g => g.mapel + ' ' + g.kelas))).join(', ');
-        return '<li role="option" data-i="' + i + '" data-nama="' + escHtml(n) + '">' + escHtml(n) + '<small>' + escHtml(mp) + '</small></li>';
-      }).join('')
+      ? hits.map((n, i) => '<li role="option" data-i="' + i + '" data-nama="' + escHtml(n) + '">' + escHtml(n) + '</li>').join('')
       : '<li class="empty">Nama tidak ditemukan. Hubungi admin untuk menambahkan.</li>';
     list.hidden = false;
     $('#kirimNama').setAttribute('aria-expanded', 'true');
@@ -910,7 +909,7 @@
     applyFilter();
   });
 
-  ['cfgOpt', 'cfgTitle', 'cfgTblImg'].forEach(id => $('#' + id).addEventListener('change', renderAll));
+  ['cfgOpt', 'cfgTitle'].forEach(id => $('#' + id).addEventListener('change', renderAll));
   $('#imgDialogClose').addEventListener('click', () => $('#imgDialog').close());
   $('#imgDialog').addEventListener('click', e => { if (e.target.id === 'imgDialog') e.target.close(); });
 })();
