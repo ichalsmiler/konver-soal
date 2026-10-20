@@ -77,6 +77,9 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .88em; backgro
 :root[data-theme="dark"] .btn.primary, :root:not([data-theme="light"]) .btn.primary { color: #fff; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #0d1a17; } }
 .btn.ghost { background: transparent; }
+.btn:disabled, .btn:disabled:hover { opacity: .45; cursor: not-allowed; }
+.btn.primary:disabled:hover { background: var(--accent); }
+.top-actions .block-hint { font-size: 12.5px; color: var(--warn); font-weight: 600; }
 .btn:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, [contenteditable]:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }

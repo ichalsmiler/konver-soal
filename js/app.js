@@ -329,6 +329,15 @@
     $('#issueList').innerHTML = bad.length
       ? bad.map(({ q, iss }) => '<button data-go="' + q.id + '"><b>' + (q.type === 'mc' ? 'No. ' : 'Essay ') + nums.get(q.id) + '</b>' + escHtml(iss.join(' · ')) + '</button>').join('')
       : '<span class="none">Semua soal sudah lengkap.</span>';
+    // Ekspor & Kirim hanya bisa bila tidak ada soal yang "Perlu dicek".
+    const block = bad.length > 0 || !state.questions.length;
+    for (const id of ['#btnExport', '#btnKirim']) {
+      const btn = $(id);
+      btn.disabled = block;
+      btn.title = bad.length ? bad.length + ' soal masih perlu dicek — perbaiki dulu (lihat panel "Perlu dicek")' : '';
+    }
+    $('#blockHint').hidden = !bad.length;
+    $('#blockHint').textContent = bad.length + ' soal perlu dicek';
     $('#ignoredCount').textContent = state.ignored.length;
     $('#ignoredList').innerHTML = state.ignored.map(t => '<li>' + escHtml(t) + '</li>').join('') || '<li>Tidak ada</li>';
   }
@@ -690,6 +699,7 @@
     metaMode = mode;
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
+    if (bad) { toast(bad + ' soal masih perlu dicek. Perbaiki dulu sebelum ' + (mode === 'kirim' ? 'mengirim.' : 'mengekspor.')); return; }
     $('#kirimInfo').textContent = state.questions.length + ' soal dari "' + state.name + '"' +
       (bad ? ' — ' + bad + ' soal masih ditandai "Perlu dicek".' : '.');
     $('#kirimInfo').classList.toggle('warn-text', bad > 0);
