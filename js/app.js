@@ -658,7 +658,14 @@
   }
   function updateFileName() {
     const m = readMeta();
+    const complete = guruNames.includes(m.nama) && !!(m.mapel && m.kelas && m.semester && m.ta);
     $('#kirimFileName').textContent = m.mapel && m.kelas && m.semester && m.ta ? metaFileName(m) : '—';
+    // Tombol "Ya, ekspor/kirim" baru aktif bila semua isian lengkap (dan tidak sedang mengirim).
+    const ok = $('#kirimOk');
+    if (!ok.dataset.busy) {
+      ok.disabled = !complete;
+      ok.title = complete ? '' : 'Lengkapi nama guru, mata pelajaran, kelas, semester, dan tahun ajaran';
+    }
   }
 
   function setGuru(nama) {
@@ -749,6 +756,7 @@
     const tahunAjaran = ta + '/' + (Number(ta) + 1);
     const btn = $('#kirimOk');
     btn.disabled = true;
+    btn.dataset.busy = '1';
     btn.textContent = 'Mengirim…';
     try {
       const rtf = await buildRtf();
@@ -776,8 +784,9 @@
     } catch (x) {
       err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
     } finally {
-      btn.disabled = false;
+      delete btn.dataset.busy;
       btn.textContent = 'Ya, kirim';
+      updateFileName();
     }
   }
 
