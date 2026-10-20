@@ -117,18 +117,39 @@
         <div>
           <strong>Apakah soal yang Anda kirim sudah diperiksa dengan baik dan benar?</strong>
           <p class="hint" id="kirimInfo"></p>
-          <p class="hint">File RTF akan dikirim ke <b id="kirimTujuan">terimasoal@sman2makassar.sch.id</b>.</p>
+          <p class="hint" id="kirimTujuanRow">File RTF akan dikirim ke <b id="kirimTujuan">terimasoal@sman2makassar.sch.id</b>.</p>
         </div>
       </div>
-      <label class="field">Nama guru
-        <input id="kirimNama" autocomplete="name" required maxlength="80">
-      </label>
+      <div class="field guru-field">
+        <label for="kirimNama">Nama guru</label>
+        <input id="kirimNama" type="search" autocomplete="off" placeholder="Ketik untuk mencari nama Anda…"
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="guruList">
+        <ul id="guruList" class="guru-list" role="listbox" hidden></ul>
+      </div>
       <label class="field">Mata pelajaran
-        <input id="kirimMapel" required maxlength="80" placeholder="mis. Ekonomi">
+        <select id="kirimMapel" required disabled><option value="">— pilih nama guru dulu —</option></select>
       </label>
-      <label class="field">Kelas
-        <input id="kirimKelas" required maxlength="40" placeholder="mis. XII">
-      </label>
+      <div class="field-row">
+        <label class="field">Kelas
+          <select id="kirimKelas" required>
+            <option value="">—</option><option>X</option><option>XI</option><option>XII</option>
+          </select>
+        </label>
+        <label class="field">Semester
+          <select id="kirimSemester" required>
+            <option value="">—</option><option>Ganjil</option><option>Genap</option>
+          </select>
+        </label>
+        <label class="field">Tahun ajaran
+          <select id="kirimTA" required>
+            <option value="">—</option>
+            <option value="2026">2026/2027</option><option value="2027">2027/2028</option>
+            <option value="2028">2028/2029</option><option value="2029">2029/2030</option>
+            <option value="2030">2030/2031</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Nama file: <b id="kirimFileName">—</b></p>
       <p class="err" id="kirimError" hidden></p>
       <div class="kirim-actions">
         <button class="btn" id="kirimBatal" type="button">Batal, periksa lagi</button>
@@ -146,6 +167,7 @@
     <div id="imgDialogBody"></div>
   </dialog>
 
+  <script src="js/data-guru.js"></script>
   <script src="lib/jszip.min.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/docx-reader.js"></script>

@@ -103,9 +103,10 @@ function smtpSend({ from, to, data }) {
 const encWord = s => '=?UTF-8?B?' + Buffer.from(s, 'utf8').toString('base64') + '?=';
 const wrap76 = s => s.replace(/(.{76})/g, '$1\r\n');
 
-function buildMessage({ nama, mapel, kelas, fileName, rtf, jumlahSoal, perluDicek, namaFileAsli }) {
+function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf, jumlahSoal, perluDicek, namaFileAsli }) {
   const boundary = 'ks-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-  const subject = 'Soal ' + mapel + ' - Kelas ' + kelas + ' - ' + nama;
+  const subject = 'Soal ' + mapel + ' - Kelas ' + kelas +
+    (semester ? ' - Semester ' + semester : '') + (tahunAjaran ? ' ' + tahunAjaran : '') + ' - ' + nama;
   const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' });
   const text = [
     'Kiriman soal dari aplikasi Konver Soal.',
@@ -113,6 +114,8 @@ function buildMessage({ nama, mapel, kelas, fileName, rtf, jumlahSoal, perluDice
     'Nama guru      : ' + nama,
     'Mata pelajaran : ' + mapel,
     'Kelas          : ' + kelas,
+    'Semester       : ' + (semester || '-'),
+    'Tahun ajaran   : ' + (tahunAjaran || '-'),
     'Jumlah soal    : ' + (jumlahSoal != null ? jumlahSoal : '-'),
     'Perlu dicek    : ' + (perluDicek != null ? perluDicek : '-'),
     'File asli      : ' + (namaFileAsli || '-'),
@@ -195,6 +198,8 @@ const server = http.createServer((req, res) => {
     try {
       const data = buildMessage({
         nama, mapel, kelas, fileName, rtf,
+        semester: /^(Ganjil|Genap)$/.test(body.semester) ? body.semester : '',
+        tahunAjaran: /^\d{4}\/\d{4}$/.test(body.tahunAjaran || '') ? body.tahunAjaran : '',
         jumlahSoal: Number.isFinite(body.jumlahSoal) ? body.jumlahSoal : null,
         perluDicek: Number.isFinite(body.perluDicek) ? body.perluDicek : null,
         namaFileAsli: clean(body.namaFileAsli, 160),

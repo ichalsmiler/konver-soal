@@ -72,6 +72,19 @@ Perintah ini menjalankan `git pull`, lalu memasang ulang dengan pengaturan port/
 
 **Hapus:** `sudo bash deploy/install.sh --uninstall`
 
+### Konfirmasi Ekspor & Kirim, nama file
+
+Tombol **Ekspor RTF** dan **Kirim** sama-sama membuka konfirmasi *"Apakah soal yang Anda kirim sudah diperiksa
+dengan baik dan benar?"* dengan isian:
+
+- **Nama guru**: ketik sebagian nama lalu pilih dari daftar (mata pelajaran & kelas terisi otomatis)
+- **Mata pelajaran**, **Kelas** (X / XI / XII), **Semester** (Ganjil / Genap), **Tahun ajaran** (2026/2027 – 2030/2031)
+
+Nama file hasil: `Mapel-Kelas-Semester-TahunAjaran.rtf`, mis. `Ekonomi (Pilihan)-XII-Genap-2026-2027.rtf`.
+
+Daftar guru ada di `js/data-guru.js` (diambil dari Lampiran 2 SK Penulis Soal Semester Ganjil & Genap TP 2025/2026).
+Untuk menambah/mengubah guru, edit file itu: setiap baris `{ "nama": "...", "mapel": "...", "kelas": "X|XI|XII" }`.
+
 ### Tombol "Kirim" (kirim soal ke terimasoal@sman2makassar.sch.id)
 
 Pengirim: akun **kirimsoal@sman2makassar.sch.id** (diisi saat `--smtp`), penerima: **terimasoal@sman2makassar.sch.id**.

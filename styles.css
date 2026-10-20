@@ -183,7 +183,19 @@ details summary { cursor: pointer; font-size: 14px; }
 .img-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .img-dialog figure { margin: 10px 0 0; overflow-x: auto; }
 .img-dialog img { display: block; background: #fff; }
-.kirim-dialog { width: min(460px, calc(100vw - 32px)); }
+.kirim-dialog { width: min(520px, calc(100vw - 32px)); overflow: visible; }
+.field-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 520px) { .field-row { grid-template-columns: 1fr; } }
+.guru-field { position: relative; }
+.guru-list {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 5; margin: 2px 0 0; padding: 4px 0; list-style: none;
+  max-height: 220px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.guru-list li { padding: 6px 10px; cursor: pointer; font-size: 14px; color: var(--text); }
+.guru-list li small { display: block; color: var(--muted); font-size: 12px; }
+.guru-list li[aria-selected="true"], .guru-list li:hover { background: var(--accent-soft); }
+.guru-list .empty { color: var(--muted); cursor: default; }
 .kirim-warn { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
 .kirim-warn svg { flex: none; color: var(--warn); }
 .kirim-warn strong { display: block; font-size: 15px; line-height: 1.4; }

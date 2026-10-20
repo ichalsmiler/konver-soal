@@ -605,7 +605,9 @@
     $('#imgDialog').showModal();
   }
 
-  const outName = () => (state.name.replace(/\.[^.]+$/, '') || 'soal') + ' (rapi).rtf';
+  /** Nama file: Mapel-Kelas-Semester-TahunAjaran.rtf (mis. "Ekonomi-XII-Genap-2026-2027.rtf"). */
+  const metaFileName = m => [m.mapel, m.kelas, m.semester, m.ta + '-' + (Number(m.ta) + 1)]
+    .map(s => String(s).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim()).join('-') + '.rtf';
 
   /** RTF hasil akhir (sama untuk Ekspor dan Kirim). */
   async function buildRtf() {
@@ -616,40 +618,100 @@
     return RtfWriter.build(questions, settings);
   }
 
-  async function exportRtf() {
-    const settings = cfg();
-    const bad = state.questions.filter(q => validate(q, settings).length).length;
-    if (bad && !confirm(bad + ' soal masih perlu dicek (lihat panel kiri). Tetap ekspor?')) return;
+  async function downloadRtf(fileName) {
     const rtf = await buildRtf();
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = outName();
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    toast('RTF diunduh: ' + a.download);
+    toast('RTF diunduh: ' + fileName);
   }
 
-  // ---------- Kirim ke email sekolah ----------
-  const KIRIM_KEY = 'konver-soal:pengirim';
-  function openKirim() {
+  // ---------- Konfirmasi Ekspor / Kirim (guru, mapel, kelas, semester, tahun ajaran) ----------
+  const META_KEY = 'konver-soal:pengirim';
+  const GURU = (window.DATA_GURU || []).slice();
+  const guruNames = Array.from(new Set(GURU.map(g => g.nama))).sort((a, b) => a.localeCompare(b, 'id'));
+  const fold = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  let metaMode = 'export';
+  let guruIdx = -1;
+
+  function readMeta() {
+    return {
+      nama: $('#kirimNama').value.trim(), mapel: $('#kirimMapel').value, kelas: $('#kirimKelas').value,
+      semester: $('#kirimSemester').value, ta: $('#kirimTA').value,
+    };
+  }
+  function updateFileName() {
+    const m = readMeta();
+    $('#kirimFileName').textContent = m.mapel && m.kelas && m.semester && m.ta ? metaFileName(m) : '—';
+  }
+
+  function setGuru(nama) {
+    $('#kirimNama').value = nama;
+    closeGuruList();
+    const rows = GURU.filter(g => g.nama === nama);
+    const sel = $('#kirimMapel');
+    const mapels = Array.from(new Set(rows.map(g => g.mapel)));
+    sel.innerHTML = mapels.length
+      ? (mapels.length > 1 ? '<option value="">— pilih mata pelajaran —</option>' : '') +
+        mapels.map(m => '<option>' + escHtml(m) + '</option>').join('')
+      : '<option value="">— pilih nama guru dulu —</option>';
+    sel.disabled = !mapels.length;
+    // Kelas otomatis sesuai data (tetap bisa diganti)
+    const pick = () => {
+      const r = rows.filter(g => g.mapel === sel.value);
+      if (r.length === 1) $('#kirimKelas').value = r[0].kelas;
+      updateFileName();
+    };
+    sel.onchange = pick;
+    pick();
+  }
+
+  function renderGuruList() {
+    const q = fold($('#kirimNama').value);
+    const list = $('#guruList');
+    const hits = guruNames.filter(n => !q || fold(n).includes(q)).slice(0, 50);
+    guruIdx = -1;
+    list.innerHTML = hits.length
+      ? hits.map((n, i) => {
+        const mp = Array.from(new Set(GURU.filter(g => g.nama === n).map(g => g.mapel + ' ' + g.kelas))).join(', ');
+        return '<li role="option" data-i="' + i + '" data-nama="' + escHtml(n) + '">' + escHtml(n) + '<small>' + escHtml(mp) + '</small></li>';
+      }).join('')
+      : '<li class="empty">Nama tidak ditemukan. Hubungi admin untuk menambahkan.</li>';
+    list.hidden = false;
+    $('#kirimNama').setAttribute('aria-expanded', 'true');
+  }
+  function closeGuruList() { $('#guruList').hidden = true; $('#kirimNama').setAttribute('aria-expanded', 'false'); }
+
+  function openMeta(mode) {
+    metaMode = mode;
     const settings = cfg();
     const bad = state.questions.filter(q => validate(q, settings).length).length;
     $('#kirimInfo').textContent = state.questions.length + ' soal dari "' + state.name + '"' +
       (bad ? ' — ' + bad + ' soal masih ditandai "Perlu dicek".' : '.');
     $('#kirimInfo').classList.toggle('warn-text', bad > 0);
+    $('#kirimTujuanRow').hidden = mode !== 'kirim';
+    $('#kirimOk').textContent = mode === 'kirim' ? 'Ya, kirim' : 'Ya, ekspor';
     try {
-      const saved = JSON.parse(localStorage.getItem(KIRIM_KEY) || '{}');
-      if (saved.nama && !$('#kirimNama').value) $('#kirimNama').value = saved.nama;
-      if (saved.mapel && !$('#kirimMapel').value) $('#kirimMapel').value = saved.mapel;
+      const saved = JSON.parse(localStorage.getItem(META_KEY) || '{}');
+      if (saved.nama && guruNames.includes(saved.nama) && !$('#kirimNama').value) {
+        setGuru(saved.nama);
+        if (saved.mapel && Array.from($('#kirimMapel').options).some(o => o.value === saved.mapel)) $('#kirimMapel').value = saved.mapel;
+      }
       if (saved.kelas && !$('#kirimKelas').value) $('#kirimKelas').value = saved.kelas;
+      if (saved.semester && !$('#kirimSemester').value) $('#kirimSemester').value = saved.semester;
+      if (saved.ta && !$('#kirimTA').value) $('#kirimTA').value = saved.ta;
     } catch (e) { /* penyimpanan lokal tidak tersedia */ }
+    updateFileName();
     $('#kirimError').hidden = true;
+    closeGuruList();
     $('#kirimDialog').showModal();
-    // Alamat tujuan sebenarnya diatur di server; tampilkan yang berlaku.
-    if (location.protocol !== 'file:') {
+    if (mode === 'kirim' && location.protocol !== 'file:') {
+      // Alamat tujuan sebenarnya diatur di server; tampilkan yang berlaku.
       fetch('api/kirim/status').then(r => (r.ok ? r.json() : null)).then(s => {
         if (s && s.tujuan) $('#kirimTujuan').textContent = s.tujuan;
         if (s && s.siap === false) {
@@ -660,13 +722,22 @@
     }
   }
 
-  async function sendKirim(e) {
+  async function submitMeta(e) {
     e.preventDefault();
-    const nama = $('#kirimNama').value.trim(), mapel = $('#kirimMapel').value.trim(), kelas = $('#kirimKelas').value.trim();
+    const m = readMeta();
     const err = msg => { $('#kirimError').textContent = msg; $('#kirimError').hidden = false; };
-    if (!nama || !mapel || !kelas) return err('Nama guru, mata pelajaran, dan kelas wajib diisi.');
+    if (!guruNames.includes(m.nama)) return err('Pilih nama guru dari daftar (ketik sebagian nama lalu klik namanya).');
+    if (!m.mapel || !m.kelas || !m.semester || !m.ta) return err('Mata pelajaran, kelas, semester, dan tahun ajaran wajib dipilih.');
+    try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (x) { /* abaikan */ }
+    const fileName = metaFileName(m);
+    if (metaMode === 'export') {
+      $('#kirimDialog').close();
+      await downloadRtf(fileName);
+      return;
+    }
     if (location.protocol === 'file:') return err('Fitur Kirim hanya bisa dipakai bila aplikasi dibuka dari server sekolah, bukan dari file di komputer.');
-    try { localStorage.setItem(KIRIM_KEY, JSON.stringify({ nama, mapel, kelas })); } catch (x) { /* abaikan */ }
+    const { nama, mapel, kelas, semester, ta } = m;
+    const tahunAjaran = ta + '/' + (Number(ta) + 1);
     const btn = $('#kirimOk');
     btn.disabled = true;
     btn.textContent = 'Mengirim…';
@@ -681,7 +752,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nama, mapel, kelas, fileName: outName(), rtfBase64: btoa(bin), namaFileAsli: state.name,
+          nama, mapel, kelas, semester, tahunAjaran, fileName, rtfBase64: btoa(bin), namaFileAsli: state.name,
           jumlahSoal: state.questions.length, perluDicek: state.questions.filter(q => validate(q, settings).length).length,
         }),
       });
@@ -722,10 +793,42 @@
     hideError();
     processLines(textLines(txt), 'Soal tempel.txt');
   });
-  $('#btnExport').addEventListener('click', exportRtf);
-  $('#btnKirim').addEventListener('click', openKirim);
-  $('#kirimForm').addEventListener('submit', sendKirim);
+  $('#btnExport').addEventListener('click', () => openMeta('export'));
+  $('#btnKirim').addEventListener('click', () => openMeta('kirim'));
+  $('#kirimForm').addEventListener('submit', submitMeta);
   $('#kirimBatal').addEventListener('click', () => $('#kirimDialog').close());
+  // Pencarian nama guru
+  const guruInput = $('#kirimNama');
+  guruInput.addEventListener('input', () => {
+    $('#kirimMapel').innerHTML = '<option value="">— pilih nama guru dulu —</option>';
+    $('#kirimMapel').disabled = true;
+    updateFileName();
+    renderGuruList();
+  });
+  guruInput.addEventListener('focus', renderGuruList);
+  guruInput.addEventListener('keydown', e => {
+    const items = Array.from($('#guruList').querySelectorAll('li[data-nama]'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if ($('#guruList').hidden) renderGuruList();
+      guruIdx = Math.max(0, Math.min(items.length - 1, guruIdx + (e.key === 'ArrowDown' ? 1 : -1)));
+      items.forEach((li, i) => li.setAttribute('aria-selected', i === guruIdx ? 'true' : 'false'));
+      if (items[guruIdx]) items[guruIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && !$('#guruList').hidden) {
+      e.preventDefault();
+      const li = items[guruIdx >= 0 ? guruIdx : 0];
+      if (li) setGuru(li.dataset.nama);
+    } else if (e.key === 'Escape' && !$('#guruList').hidden) {
+      e.preventDefault();
+      closeGuruList();
+    }
+  });
+  $('#guruList').addEventListener('mousedown', e => {
+    const li = e.target.closest('li[data-nama]');
+    if (li) { e.preventDefault(); setGuru(li.dataset.nama); }
+  });
+  guruInput.addEventListener('blur', () => setTimeout(closeGuruList, 150));
+  ['kirimKelas', 'kirimSemester', 'kirimTA'].forEach(id => $('#' + id).addEventListener('change', updateFileName));
   $('#btnReset').addEventListener('click', () => {
     $('#work').hidden = true;
     $('#topActions').hidden = true;
