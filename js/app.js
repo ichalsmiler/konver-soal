@@ -820,7 +820,7 @@
           ? 'Layanan kirim belum terpasang di server.' : 'Gagal mengirim (kode ' + res.status + ').'));
       }
       $('#kirimDialog').close();
-      showSent(m, fileName, data.pesan);
+      showSent(m, data.pesan);
     } catch (x) {
       err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
     } finally {
@@ -831,15 +831,13 @@
   }
 
   // Pop-up "Soal berhasil dikirim" beserta rincian kiriman.
-  function showSent(m, fileName, pesan) {
+  function showSent(m, pesan) {
     const rows = [
       ['Guru', m.nama],
       ['Mata pelajaran', m.mapel],
       ['Kelas', m.kelas],
       ['Semester', m.semester + ' ' + m.ta + '/' + (Number(m.ta) + 1)],
-      ['Nama file', fileName],
-      ['Dikirim ke', $('#kirimTujuan').textContent],
-      ['Jumlah soal', String(state.questions.length)],
+      ['Jumlah soal', state.questions.length + ' Soal'],
       ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
     ];
     $('#sentMsg').textContent = pesan || 'File RTF sudah dikirim lewat email sekolah.';

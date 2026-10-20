@@ -95,7 +95,7 @@ beserta isian nama guru, mata pelajaran, dan kelas. Setelah **Ya, kirim**, file 
 di server (`server/kirim.js`, dipasang otomatis oleh `install.sh` sebagai service `konver-soal-kirim`).
 Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke alamat lain.
 Setelah berhasil, muncul pop-up *"Soal berhasil dikirim"* berisi guru, mata pelajaran, kelas, semester,
-nama file, alamat tujuan, jumlah soal, dan waktu kirim.
+jumlah soal, dan waktu kirim.
 
 Soal pilihan ganda baru bisa ditambahkan dari tombol **Tambah soal** di atas atau di bawah daftar soal, atau ikon
 **+** pada tiap soal (disisipkan tepat di bawah soal itu).
