@@ -99,25 +99,15 @@
             <button type="button" class="on" data-filter="all">Semua</button>
             <button type="button" data-filter="issues">Perlu dicek</button>
           </div>
-          <div class="add-menu">
-            <button class="btn primary sm" id="btnAddMenu" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="addMenu">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
-              Tambah soal
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="m7 10 5 5 5-5H7Z"/></svg>
-            </button>
-            <div class="menu" id="addMenu" role="menu" hidden>
-              <button type="button" role="menuitem" data-add="mc"><b>Pilihan ganda</b><span>Soal dengan opsi a–e dan kunci</span></button>
-              <button type="button" role="menuitem" data-add="essay"><b>Essay</b><span>Soal uraian dengan pedoman jawaban</span></button>
-            </div>
-          </div>
+          <button class="btn primary sm" type="button" data-add="mc">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
+            Tambah soal
+          </button>
         </div>
         <span class="hint">Klik teks untuk mengedit · huruf di kiri opsi = kunci · Shift+Enter: baris baru di opsi · Tab: sisipkan tab</span>
       </div>
       <div id="questions"></div>
-      <div class="add-q-row">
-        <button class="btn add-q" type="button" data-add="mc">+ Soal pilihan ganda</button>
-        <button class="btn add-q" type="button" data-add="essay">+ Soal essay</button>
-      </div>
+      <button class="btn add-q" type="button" data-add="mc">+ Tambah soal</button>
     </section>
   </div>
 

@@ -97,8 +97,8 @@ Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke
 Setelah berhasil, muncul pop-up *"Soal berhasil dikirim"* berisi guru, mata pelajaran, kelas, semester,
 nama file, alamat tujuan, jumlah soal, dan waktu kirim.
 
-Soal baru bisa ditambahkan dari menu **Tambah soal** di atas daftar soal (pilihan ganda atau essay), tombol di
-bawah daftar, atau ikon **+** pada tiap soal (disisipkan tepat di bawah soal itu).
+Soal pilihan ganda baru bisa ditambahkan dari tombol **Tambah soal** di atas atau di bawah daftar soal, atau ikon
+**+** pada tiap soal (disisipkan tepat di bawah soal itu).
 
 Layanan ini butuh satu **akun pengirim Google (Gmail / Google Workspace sekolah)** dengan **App Password**:
 
@@ -159,7 +159,7 @@ Yang dilakukan skrip:
   gambar tabel kecil (judul + barisnya) dengan lebar kolom seragam.
 - Tabel opsi (baris berlabel A–E, atau menyamping dengan A–E di baris atas) diubah menjadi opsi a–e.
 - Daftar petunjuk bernomor sebelum judul "Soal Pilihan Ganda" tidak dianggap soal.
-- Bagian Essay/Uraian juga dikenali.
+- Aplikasi khusus pilihan ganda: soal di bagian Essay/Uraian tidak diekspor, hanya ditampilkan di "Teks di luar soal".
 
 ## Batasan
 

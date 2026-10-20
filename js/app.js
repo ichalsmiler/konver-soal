@@ -85,6 +85,12 @@
 
   async function processLines(lines, name) {
     const res = ExamParser.parse(lines, { optCount: cfg().optCount });
+    // Aplikasi khusus pilihan ganda: soal di bagian Essay/Uraian tidak diekspor, cukup ditampilkan
+    // di "Teks di luar soal".
+    const essays = res.questions.filter(q => q.type !== 'mc');
+    res.questions = res.questions.filter(q => q.type === 'mc');
+    res.ignored = res.ignored.concat(essays.map(q => 'Essay (tidak diekspor): ' +
+      q.stem.filter(p => !isTable(p)).map(p => Segs.text(p)).join(' ').trim()));
     if (!res.questions.length) {
       showError('Tidak ada soal yang terdeteksi. Pastikan setiap soal diawali nomor (mis. "1.") dan opsi diawali huruf (a., b., ...).');
       return;
@@ -101,7 +107,8 @@
     $('#fileChip').title = name;
     renderAll();
     const bad = state.questions.filter(q => validate(q, cfg()).length).length;
-    toast(state.questions.length + ' soal terdeteksi' + (bad ? ' · ' + bad + ' perlu dicek' : ''));
+    toast(state.questions.length + ' soal terdeteksi' + (bad ? ' · ' + bad + ' perlu dicek' : '') +
+      (essays.length ? ' · ' + essays.length + ' soal essay tidak dimasukkan' : ''));
     window.scrollTo(0, 0);
   }
 
@@ -269,7 +276,6 @@
     if (isTable(stemItems[stemItems.length - 1])) stemHtml += '<div><br></div>'; // tempat kursor setelah tabel
     let body = '<div class="q-head">' +
       '<span class="q-num">' + n + '.</span>' +
-      '<select class="q-type" data-act="type" aria-label="Jenis soal"><option value="mc"' + (q.type === 'mc' ? ' selected' : '') + '>Pilihan ganda</option><option value="essay"' + (q.type === 'essay' ? ' selected' : '') + '>Essay</option></select>' +
       '<div class="q-tools">' +
       '<button class="icon-btn" data-act="up" title="Naikkan">' + ICON.up + '</button>' +
       '<button class="icon-btn" data-act="down" title="Turunkan">' + ICON.down + '</button>' +
@@ -277,20 +283,15 @@
       '<button class="icon-btn del" data-act="del" title="Hapus soal">' + ICON.del + '</button>' +
       '</div></div>' +
       '<div class="edit stem" contenteditable="true" data-field="stem" aria-label="Teks soal">' + stemHtml + '</div>';
-    if (q.type === 'mc') {
-      body += '<ol class="opts">' + q.options.map((o, i) => {
-        const L = letter(i);
-        return '<li class="opt"><button class="key' + (q.answer === L ? ' on' : '') + '" data-act="key" data-i="' + i + '" title="Jadikan kunci">' + L.toLowerCase() + '</button>' +
-          '<div class="edit' + (/\n/.test(Segs.text(o)) ? ' multi' : '') + '" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + segsToHtml(o) + '</div>' +
-          '<button class="icon-btn del" data-act="rmopt" data-i="' + i + '" title="Hapus opsi">' + ICON.x + '</button></li>';
-      }).join('') + '</ol>' +
-        '<div class="q-foot"><button class="link-btn" data-act="addopt">+ Opsi</button>' +
-        '<span class="ans">ANS: <b>' + (q.answer || '—') + '</b></span>' + tableImgBtn(q, settings) + '</div>';
-    } else {
-      body += '<label class="essay-ans">ANS: <input data-field="essay" value="' + escHtml(q.answer || '') + '" placeholder="Jawaban / pedoman penskoran (opsional)"></label>';
-      if (hasTable(q) && settings.tableImages) body += '<div class="q-foot">' + tableImgBtn(q, settings) + '</div>';
-    }
-    body += '<div class="badges"></div>';
+    body += '<ol class="opts">' + q.options.map((o, i) => {
+      const L = letter(i);
+      return '<li class="opt"><button class="key' + (q.answer === L ? ' on' : '') + '" data-act="key" data-i="' + i + '" title="Jadikan kunci">' + L.toLowerCase() + '</button>' +
+        '<div class="edit' + (/\n/.test(Segs.text(o)) ? ' multi' : '') + '" contenteditable="true" data-field="opt" data-i="' + i + '" aria-label="Opsi ' + L + '">' + segsToHtml(o) + '</div>' +
+        '<button class="icon-btn del" data-act="rmopt" data-i="' + i + '" title="Hapus opsi">' + ICON.x + '</button></li>';
+    }).join('') + '</ol>' +
+      '<div class="q-foot"><button class="link-btn" data-act="addopt">+ Opsi</button>' +
+      '<span class="ans">ANS: <b>' + (q.answer || '—') + '</b></span>' + tableImgBtn(q, settings) + '</div>' +
+      '<div class="badges"></div>';
     el.innerHTML = body;
     paintBadges(el, q, settings);
     return el;
@@ -327,7 +328,7 @@
       '<div class="stat ok"><b>' + (total - bad.length) + '</b><span>Siap</span></div>' +
       '<div class="stat warn"><b>' + bad.length + '</b><span>Perlu dicek</span></div>';
     $('#issueList').innerHTML = bad.length
-      ? bad.map(({ q, iss }) => '<button data-go="' + q.id + '"><b>' + (q.type === 'mc' ? 'No. ' : 'Essay ') + nums.get(q.id) + '</b>' + escHtml(iss.join(' · ')) + '</button>').join('')
+      ? bad.map(({ q, iss }) => '<button data-go="' + q.id + '"><b>' + 'No. ' + nums.get(q.id) + '</b>' + escHtml(iss.join(' · ')) + '</button>').join('')
       : '<span class="none">Semua soal sudah lengkap.</span>';
     // Ekspor & Kirim hanya bisa bila tidak ada soal yang "Perlu dicek".
     const block = bad.length > 0 || !state.questions.length;
@@ -384,7 +385,7 @@
       if (!confirm('Hapus soal ini?')) return;
       list.splice(idx, 1);
     } else if (act === 'addq') {
-      const nq = blankQuestion(q.type);
+      const nq = blankQuestion();
       list.splice(idx + 1, 0, nq);
       renderAll();
       focusStem(nq);
@@ -408,11 +409,11 @@
     if (el && (act === 'up' || act === 'down')) el.scrollIntoView({ block: 'nearest' });
   }
 
-  function blankQuestion(type) {
+  function blankQuestion() {
     return {
-      id: ++uid, type, srcNum: null, stem: [], notes: [],
-      options: type === 'mc' ? Array.from({ length: cfg().optCount }, () => []) : [],
-      answer: type === 'mc' ? null : '',
+      id: ++uid, type: 'mc', srcNum: null, stem: [], notes: [],
+      options: Array.from({ length: cfg().optCount }, () => []),
+      answer: null,
     };
   }
 
@@ -437,8 +438,7 @@
       const joined = paras.reduce((a, p, k) => a.concat(k ? [{ t: multi ? '\n' : ' ' }] : [], p), []);
       q.options[i] = multi ? Segs.tidyLines(joined) : Segs.tidy(joined);
       t.classList.toggle('multi', /\n/.test(Segs.text(q.options[i])));
-    } else if (f === 'essay') q.answer = t.value;
-    else return;
+    } else return;
     refreshMeta(q);
   }
 
@@ -832,8 +832,6 @@
 
   // Pop-up "Soal berhasil dikirim" beserta rincian kiriman.
   function showSent(m, fileName, pesan) {
-    const nMc = state.questions.filter(q => q.type === 'mc').length;
-    const nEssay = state.questions.length - nMc;
     const rows = [
       ['Guru', m.nama],
       ['Mata pelajaran', m.mapel],
@@ -841,7 +839,7 @@
       ['Semester', m.semester + ' ' + m.ta + '/' + (Number(m.ta) + 1)],
       ['Nama file', fileName],
       ['Dikirim ke', $('#kirimTujuan').textContent],
-      ['Jumlah soal', nMc + ' pilihan ganda' + (nEssay ? ' · ' + nEssay + ' essay' : '')],
+      ['Jumlah soal', state.questions.length + ' soal pilihan ganda'],
       ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
     ];
     $('#sentMsg').textContent = pesan || 'File RTF sudah dikirim lewat email sekolah.';
@@ -915,57 +913,20 @@
     $('#start').hidden = false;
     $('#fileInput').value = '';
   });
-  // Tambah soal (menu di atas daftar dan tombol di bawahnya): soal kosong di akhir daftar.
-  function addQuestion(type) {
-    const nq = blankQuestion(type);
+  // Tambah soal (tombol di atas dan di bawah daftar): soal pilihan ganda kosong di akhir daftar.
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-add]')) return;
+    const nq = blankQuestion();
     state.questions.push(nq);
     renderAll();
     focusStem(nq);
-    toast((type === 'mc' ? 'Soal pilihan ganda no. ' : 'Soal essay no. ') + numbers().get(nq.id) + ' ditambahkan');
-  }
-  const addMenu = $('#addMenu'), addMenuBtn = $('#btnAddMenu');
-  function toggleAddMenu(open) {
-    addMenu.hidden = !open;
-    addMenuBtn.setAttribute('aria-expanded', String(open));
-    if (open) addMenu.querySelector('[data-add]').focus();
-  }
-  addMenuBtn.addEventListener('click', () => toggleAddMenu(addMenu.hidden));
-  document.addEventListener('click', e => {
-    const b = e.target.closest('[data-add]');
-    if (b) { toggleAddMenu(false); addQuestion(b.dataset.add); return; }
-    if (!addMenu.hidden && !e.target.closest('.add-menu')) toggleAddMenu(false);
-  });
-  addMenu.addEventListener('keydown', e => {
-    const items = Array.from(addMenu.querySelectorAll('[data-add]'));
-    const i = items.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
-    } else if (e.key === 'Escape') {
-      toggleAddMenu(false);
-      addMenuBtn.focus();
-    }
+    toast('Soal no. ' + numbers().get(nq.id) + ' ditambahkan');
   });
 
   const qs = $('#questions');
   qs.addEventListener('click', e => {
     const b = e.target.closest('button[data-act]');
     if (b) onAction(b);
-  });
-  qs.addEventListener('change', e => {
-    const s = e.target.closest('select[data-act="type"]');
-    if (!s) return;
-    const q = qOf(s);
-    q.type = s.value;
-    if (q.type === 'mc') {
-      if (!q.options.length) q.options = Array.from({ length: cfg().optCount }, () => []);
-      q.answer = /^[A-Z]$/.test(q.answer || '') ? q.answer : null;
-    } else {
-      q.answer = '';
-    }
-    renderAll();
-    const el = document.getElementById('q' + q.id);
-    if (el) el.scrollIntoView({ block: 'center' });
   });
   qs.addEventListener('input', onInput);
   qs.addEventListener('paste', onPaste);
