@@ -94,6 +94,11 @@ Tombol **Kirim** menampilkan konfirmasi *"Apakah soal yang Anda kirim sudah dipe
 beserta isian nama guru, mata pelajaran, dan kelas. Setelah **Ya, kirim**, file RTF dikirim lewat layanan kecil
 di server (`server/kirim.js`, dipasang otomatis oleh `install.sh` sebagai service `konver-soal-kirim`).
 Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke alamat lain.
+Setelah berhasil, muncul pop-up *"Soal berhasil dikirim"* berisi guru, mata pelajaran, kelas, semester,
+nama file, alamat tujuan, jumlah soal, dan waktu kirim.
+
+Soal baru bisa ditambahkan dari menu **Tambah soal** di atas daftar soal (pilihan ganda atau essay), tombol di
+bawah daftar, atau ikon **+** pada tiap soal (disisipkan tepat di bawah soal itu).
 
 Layanan ini butuh satu **akun pengirim Google (Gmail / Google Workspace sekolah)** dengan **App Password**:
 

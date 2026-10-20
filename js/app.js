@@ -820,7 +820,7 @@
           ? 'Layanan kirim belum terpasang di server.' : 'Gagal mengirim (kode ' + res.status + ').'));
       }
       $('#kirimDialog').close();
-      toast(data.pesan || 'Soal terkirim.');
+      showSent(m, fileName, data.pesan);
     } catch (x) {
       err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
     } finally {
@@ -829,6 +829,28 @@
       updateFileName();
     }
   }
+
+  // Pop-up "Soal berhasil dikirim" beserta rincian kiriman.
+  function showSent(m, fileName, pesan) {
+    const nMc = state.questions.filter(q => q.type === 'mc').length;
+    const nEssay = state.questions.length - nMc;
+    const rows = [
+      ['Guru', m.nama],
+      ['Mata pelajaran', m.mapel],
+      ['Kelas', m.kelas],
+      ['Semester', m.semester + ' ' + m.ta + '/' + (Number(m.ta) + 1)],
+      ['Nama file', fileName],
+      ['Dikirim ke', $('#kirimTujuan').textContent],
+      ['Jumlah soal', nMc + ' pilihan ganda' + (nEssay ? ' · ' + nEssay + ' essay' : '')],
+      ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
+    ];
+    $('#sentMsg').textContent = pesan || 'File RTF sudah dikirim lewat email sekolah.';
+    $('#sentInfo').innerHTML = rows.map(([k, v]) => '<dt>' + escHtml(k) + '</dt><dd>' + escHtml(v) + '</dd>').join('');
+    $('#sentDialog').showModal();
+    $('#sentClose').focus();
+  }
+  $('#sentClose').addEventListener('click', () => $('#sentDialog').close());
+  $('#sentDialog').addEventListener('click', e => { if (e.target.id === 'sentDialog') e.target.close(); });
 
   let toastTimer = null;
   function toast(msg) {
@@ -893,12 +915,36 @@
     $('#start').hidden = false;
     $('#fileInput').value = '';
   });
-  $('#btnAddQ').addEventListener('click', () => {
-    const last = state.questions[state.questions.length - 1];
-    const nq = blankQuestion(last ? last.type : 'mc');
+  // Tambah soal (menu di atas daftar dan tombol di bawahnya): soal kosong di akhir daftar.
+  function addQuestion(type) {
+    const nq = blankQuestion(type);
     state.questions.push(nq);
     renderAll();
     focusStem(nq);
+    toast((type === 'mc' ? 'Soal pilihan ganda no. ' : 'Soal essay no. ') + numbers().get(nq.id) + ' ditambahkan');
+  }
+  const addMenu = $('#addMenu'), addMenuBtn = $('#btnAddMenu');
+  function toggleAddMenu(open) {
+    addMenu.hidden = !open;
+    addMenuBtn.setAttribute('aria-expanded', String(open));
+    if (open) addMenu.querySelector('[data-add]').focus();
+  }
+  addMenuBtn.addEventListener('click', () => toggleAddMenu(addMenu.hidden));
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-add]');
+    if (b) { toggleAddMenu(false); addQuestion(b.dataset.add); return; }
+    if (!addMenu.hidden && !e.target.closest('.add-menu')) toggleAddMenu(false);
+  });
+  addMenu.addEventListener('keydown', e => {
+    const items = Array.from(addMenu.querySelectorAll('[data-add]'));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === 'Escape') {
+      toggleAddMenu(false);
+      addMenuBtn.focus();
+    }
   });
 
   const qs = $('#questions');
