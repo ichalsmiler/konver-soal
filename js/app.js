@@ -839,7 +839,7 @@
       ['Semester', m.semester + ' ' + m.ta + '/' + (Number(m.ta) + 1)],
       ['Nama file', fileName],
       ['Dikirim ke', $('#kirimTujuan').textContent],
-      ['Jumlah soal', state.questions.length + ' soal pilihan ganda'],
+      ['Jumlah soal', String(state.questions.length)],
       ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
     ];
     $('#sentMsg').textContent = pesan || 'File RTF sudah dikirim lewat email sekolah.';
