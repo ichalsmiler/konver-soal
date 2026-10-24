@@ -17,7 +17,7 @@ Nomor soal dan huruf opsi memakai numbering Word asli; opsi dimulai ulang dari "
 ## Versi
 
 Label versi (mis. **V1.1**) tampil di bilah atas dan disimpan di file `VERSION`. Versi naik otomatis setiap commit
-(V1.1 → V1.2 → …) lewat hook `.githooks/pre-commit`. Aktifkan sekali per clone:
+lewat hook `.githooks/pre-commit`; setelah .9 naik ke angka depan (V1.9 → V2.0 → … → V2.9 → V3.0). Aktifkan sekali per clone:
 
 ```bash
 git config core.hooksPath .githooks
