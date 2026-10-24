@@ -279,8 +279,7 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
 
 /* Pop-up terkirim */
 .sent-dialog { width: min(420px, calc(100vw - 32px)); text-align: center; padding: 24px 24px 18px; }
-.sent-dialog h2 { margin: 0 0 4px; font-size: 19px; font-weight: 600; }
-.sent-dialog #sentMsg { margin: 0 0 16px; }
+.sent-dialog h2 { margin: 0 0 16px; font-size: 19px; font-weight: 600; }
 .sent-info { display: grid; grid-template-columns: auto 1fr; margin: 0 0 18px; text-align: left; font-size: 14px; border-top: 1px solid var(--rule); }
 .sent-info dt, .sent-info dd { padding: 7px 0; border-bottom: 1px solid var(--rule); }
 .sent-info dt { color: var(--muted); padding-right: 16px; }

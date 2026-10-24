@@ -928,7 +928,7 @@
           ? 'Layanan kirim belum terpasang di server.' : 'Gagal mengirim (kode ' + res.status + ').'));
       }
       $('#kirimDialog').close();
-      showSent(m, data.pesan);
+      showSent(m);
     } catch (x) {
       err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
     } finally {
@@ -939,7 +939,7 @@
   }
 
   // Pop-up "Soal berhasil dikirim" beserta rincian kiriman.
-  function showSent(m, pesan) {
+  function showSent(m) {
     const rows = [
       ['Guru', m.nama],
       ['Mata pelajaran', m.mapel],
@@ -948,7 +948,6 @@
       ['Jumlah soal', state.questions.length + ' Soal'],
       ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
     ];
-    $('#sentMsg').textContent = pesan || 'File RTF sudah dikirim lewat email sekolah.';
     $('#sentInfo').innerHTML = rows.map(([k, v]) => '<dt>' + escHtml(k) + '</dt><dd>' + escHtml(v) + '</dd>').join('');
     $('#sentDialog').showModal();
     $('#sentClose').focus();
