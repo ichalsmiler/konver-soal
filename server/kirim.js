@@ -102,27 +102,38 @@ function smtpSend({ from, to, data }) {
 // ---------- Pesan MIME ----------
 const encWord = s => '=?UTF-8?B?' + Buffer.from(s, 'utf8').toString('base64') + '?=';
 const wrap76 = s => s.replace(/(.{76})/g, '$1\r\n');
+const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf, jumlahSoal, perluDicek, namaFileAsli }) {
   const boundary = 'ks-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const altBoundary = boundary + '-alt';
   const subject = 'Soal ' + mapel + ' - Kelas ' + kelas +
     (semester ? ' - Semester ' + semester : '') + (tahunAjaran ? ' ' + tahunAjaran : '') + ' - ' + nama;
   const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' });
-  const text = [
-    'Kiriman soal dari aplikasi Konver Soal.',
-    '',
-    'Nama guru      : ' + nama,
-    'Mata pelajaran : ' + mapel,
-    'Kelas          : ' + kelas,
-    'Semester       : ' + (semester || '-'),
-    'Tahun ajaran   : ' + (tahunAjaran || '-'),
-    'Jumlah soal    : ' + (jumlahSoal != null ? jumlahSoal : '-'),
-    'Perlu dicek    : ' + (perluDicek != null ? perluDicek : '-'),
-    'File asli      : ' + (namaFileAsli || '-'),
-    'Waktu kirim    : ' + waktu + ' WITA',
-    '',
-    'File RTF terlampir.',
-  ].join('\r\n');
+  const rows = [
+    ['Nama guru', nama],
+    ['Mata pelajaran', mapel],
+    ['Kelas', kelas],
+    ['Semester', semester || '-'],
+    ['Tahun ajaran', tahunAjaran || '-'],
+    ['Jumlah soal', jumlahSoal != null ? jumlahSoal : '-'],
+    ['Perlu dicek', perluDicek != null ? perluDicek : '-'],
+    ['File asli', namaFileAsli || '-'],
+    ['Waktu kirim', waktu + ' WITA'],
+  ];
+  // Teks biasa: sejajar bila dibaca dengan huruf monospace.
+  const width = Math.max(...rows.map(r => r[0].length));
+  const text = ['Kiriman soal dari aplikasi Konver Soal.', '']
+    .concat(rows.map(([k, v]) => k.padEnd(width) + ' : ' + v), ['', 'File RTF terlampir.'])
+    .join('\r\n');
+  // HTML: tabel, sehingga titik dua tetap sejajar di Gmail/Outlook (huruf proporsional).
+  const td = 'padding:3px 0;vertical-align:top;';
+  const html = '<!doctype html><html><body style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1b2430">' +
+    '<p style="margin:0 0 12px">Kiriman soal dari aplikasi Konver Soal.</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
+    rows.map(([k, v]) => '<tr><td style="' + td + 'white-space:nowrap;color:#5a6576">' + escHtml(k) + '</td>' +
+      '<td style="' + td + 'padding:3px 8px;">:</td><td style="' + td + 'font-weight:bold">' + escHtml(v) + '</td></tr>').join('') +
+    '</table><p style="margin:12px 0 0">File RTF terlampir.</p></body></html>';
   return [
     'From: ' + encWord(cfg.fromName) + ' <' + cfg.user + '>',
     'To: <' + cfg.to + '>',
@@ -132,10 +143,19 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
     'Content-Type: multipart/mixed; boundary="' + boundary + '"',
     '',
     '--' + boundary,
+    'Content-Type: multipart/alternative; boundary="' + altBoundary + '"',
+    '',
+    '--' + altBoundary,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
     wrap76(Buffer.from(text, 'utf8').toString('base64')),
+    '--' + altBoundary,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    wrap76(Buffer.from(html, 'utf8').toString('base64')),
+    '--' + altBoundary + '--',
     '--' + boundary,
     'Content-Type: application/rtf; name="' + fileName + '"',
     'Content-Transfer-Encoding: base64',
