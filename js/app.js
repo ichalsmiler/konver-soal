@@ -669,8 +669,29 @@
     return RtfWriter.build(questions, settings);
   }
 
-  async function downloadRtf(fileName) {
-    const rtf = await buildRtf();
+  // RTF mulai dibuat begitu dialog Ekspor/Kirim dibuka (sementara guru mengisi nama, mapel, kelas),
+  // sehingga saat "Ya, kirim" ditekan file biasanya sudah siap. Soal tidak bisa diubah selama dialog terbuka;
+  // hasilnya dibuang saat dialog ditutup.
+  let rtfJob = null;
+  function startRtf() {
+    if (!rtfJob) {
+      const job = buildRtf();
+      rtfJob = job;
+      job.catch(() => { if (rtfJob === job) rtfJob = null; });
+    }
+    return rtfJob;
+  }
+
+  // Body JSON dikompres gzip bila browser mendukung (RTF berupa teks hex, menyusut ±10x).
+  async function jsonBody(obj) {
+    const json = JSON.stringify(obj);
+    if (typeof CompressionStream === 'undefined') return { body: json, headers: { 'Content-Type': 'application/json' } };
+    const body = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
+    return { body, headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } };
+  }
+
+  async function downloadRtf(fileName, job) {
+    const rtf = await (job || buildRtf());
     const blob = new Blob([rtf], { type: 'application/rtf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -766,6 +787,7 @@
     $('#kirimError').hidden = true;
     closeGuruList();
     $('#kirimDialog').showModal();
+    startRtf();
     if (mode === 'kirim' && location.protocol !== 'file:') {
       // Alamat tujuan sebenarnya diatur di server; tampilkan yang berlaku.
       fetch('api/kirim/status').then(r => (r.ok ? r.json() : null)).then(s => {
@@ -787,8 +809,9 @@
     try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (x) { /* abaikan */ }
     const fileName = metaFileName(m);
     if (metaMode === 'export') {
+      const job = startRtf();
       $('#kirimDialog').close();
-      await downloadRtf(fileName);
+      await downloadRtf(fileName, job);
       return;
     }
     if (location.protocol === 'file:') return err('Fitur Kirim hanya bisa dipakai bila aplikasi dibuka dari server sekolah, bukan dari file di komputer.');
@@ -797,22 +820,25 @@
     const btn = $('#kirimOk');
     btn.disabled = true;
     btn.dataset.busy = '1';
-    btn.textContent = 'Mengirim…';
+    btn.textContent = 'Menyiapkan file…';
     try {
-      const rtf = await buildRtf();
-      const bytes = new Uint8Array(rtf.length);
-      for (let i = 0; i < rtf.length; i++) bytes[i] = rtf.charCodeAt(i) & 0xFF;
-      let bin = '';
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const rtf = await startRtf();
+      btn.textContent = 'Mengirim…';
       const settings = cfg();
-      const res = await fetch('api/kirim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nama, mapel, kelas, semester, tahunAjaran, fileName, rtfBase64: btoa(bin), namaFileAsli: state.name,
-          jumlahSoal: state.questions.length, perluDicek: state.questions.filter(q => validate(q, settings).length).length,
-        }),
-      });
+      const payload = {
+        nama, mapel, kelas, semester, tahunAjaran, fileName, namaFileAsli: state.name,
+        jumlahSoal: state.questions.length, perluDicek: state.questions.filter(q => validate(q, settings).length).length,
+      };
+      // RTF hasil RtfWriter berupa ASCII murni: kirim sebagai teks (lebih kecil setelah gzip daripada base64).
+      if (/^[\x00-\x7F]*$/.test(rtf)) payload.rtf = rtf;
+      else {
+        let bin = '';
+        for (let i = 0; i < rtf.length; i += 0x8000) {
+          bin += String.fromCharCode.apply(null, Array.from(rtf.slice(i, i + 0x8000), ch => ch.charCodeAt(0) & 0xFF));
+        }
+        payload.rtfBase64 = btoa(bin);
+      }
+      const res = await fetch('api/kirim', Object.assign({ method: 'POST' }, await jsonBody(payload)));
       let data = {};
       try { data = await res.json(); } catch (x) { data = {}; }
       if (!res.ok || !data.ok) {
@@ -873,6 +899,8 @@
   $('#btnKirim').addEventListener('click', () => openMeta('kirim'));
   $('#kirimForm').addEventListener('submit', submitMeta);
   $('#kirimBatal').addEventListener('click', () => $('#kirimDialog').close());
+  // Soal bisa diubah lagi setelah dialog ditutup: RTF yang sudah disiapkan tidak dipakai ulang.
+  $('#kirimDialog').addEventListener('close', () => { rtfJob = null; });
   // Pencarian nama guru
   const guruInput = $('#kirimNama');
   guruInput.addEventListener('input', () => {

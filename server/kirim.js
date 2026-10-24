@@ -11,7 +11,8 @@
  *   PORT=3091   HOST=127.0.0.1   RATE_PER_HOUR=20
  *
  * Endpoint:  POST /api/kirim  (JSON)
- *   { nama, mapel, kelas, fileName, rtfBase64, jumlahSoal, perluDicek, namaFileAsli }
+ *   { nama, mapel, kelas, fileName, rtf (teks) | rtfBase64, jumlahSoal, perluDicek, namaFileAsli }
+ *   Body boleh dikompres (Content-Encoding: gzip).
  */
 'use strict';
 
@@ -19,6 +20,7 @@ const http = require('http');
 const net = require('net');
 const tls = require('tls');
 const os = require('os');
+const zlib = require('zlib');
 
 const cfg = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -209,10 +211,21 @@ const server = http.createServer((req, res) => {
   req.on('end', async () => {
     if (res.writableEnded) return;
     let body;
-    try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
+    try {
+      let raw = Buffer.concat(chunks);
+      // Aplikasi mengompres body dengan gzip (±10x lebih kecil, unggah jauh lebih cepat).
+      if (/gzip/i.test(req.headers['content-encoding'] || '')) {
+        raw = await new Promise((ok, no) => zlib.gunzip(raw, { maxOutputLength: cfg.maxBytes * 2 }, (e, out) => (e ? no(e) : ok(out))));
+        if (raw.length > cfg.maxBytes * 2) return reply(res, 413, { ok: false, pesan: 'File terlalu besar.' });
+      }
+      body = JSON.parse(raw.toString('utf8'));
+    } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
     const nama = clean(body.nama, 80), mapel = clean(body.mapel, 80), kelas = clean(body.kelas, 40);
     if (!nama || !mapel || !kelas) return reply(res, 400, { ok: false, pesan: 'Nama guru, mata pelajaran, dan kelas wajib diisi.' });
-    const rtf = Buffer.from(String(body.rtfBase64 || ''), 'base64');
+    // RTF dikirim sebagai teks (rtf) atau, dari versi lama aplikasi, base64 (rtfBase64).
+    const rtf = typeof body.rtf === 'string'
+      ? Buffer.from(body.rtf, 'latin1')
+      : Buffer.from(String(body.rtfBase64 || ''), 'base64');
     if (rtf.length < 10 || rtf.length > cfg.maxBytes || !rtf.slice(0, 6).toString('latin1').startsWith('{\\rtf')) {
       return reply(res, 400, { ok: false, pesan: 'Lampiran bukan file RTF yang valid.' });
     }
