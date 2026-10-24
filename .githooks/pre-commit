@@ -1,0 +1,20 @@
+#!/bin/sh
+# Naikkan versi aplikasi setiap commit: 1.1 -> 1.2 -> ... -> 1.10, dst.
+# Memperbarui file VERSION dan label versi di bilah atas index.html.
+# Aktifkan sekali per clone:  git config core.hooksPath .githooks
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+git diff --cached --quiet && exit 0
+
+cur=$(tr -d ' \r\n' < VERSION)
+major=${cur%%.*}
+minor=${cur#*.}
+new="$major.$((minor + 1))"
+
+printf '%s\n' "$new" > VERSION
+sed -i "s|id=\"appVersion\"\([^>]*\)>V[0-9.]*<|id=\"appVersion\"\1>V$new<|" index.html
+grep -q ">V$new<" index.html || { echo "pre-commit: label versi di index.html tidak ditemukan" >&2; exit 1; }
+
+git add VERSION index.html
+echo "Versi aplikasi: V$cur -> V$new"

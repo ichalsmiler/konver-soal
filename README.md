@@ -14,6 +14,15 @@ Multiple choice
 
 Nomor soal dan huruf opsi memakai numbering Word asli; opsi dimulai ulang dari "a" di setiap soal.
 
+## Versi
+
+Label versi (mis. **V1.1**) tampil di bilah atas dan disimpan di file `VERSION`. Versi naik otomatis setiap commit
+(V1.1 → V1.2 → …) lewat hook `.githooks/pre-commit`. Aktifkan sekali per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Cara pakai
 
 1. Buka `index.html` di browser (tidak perlu server atau internet).

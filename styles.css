@@ -50,6 +50,10 @@ code { font-family: var(--mono); font-size: .86em; background: var(--paper-tint)
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .brand strong { display: block; color: var(--text); font-size: 15px; font-weight: 600; line-height: 1.2; }
 .brand .sub { font-size: 12.5px; color: var(--muted); }
+.version {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--edge); border-radius: 3px;
+  font: 600 11.5px/1.6 var(--mono); color: var(--ink); vertical-align: 1px;
+}
 .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .file-chip { font-size: 13px; color: var(--muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-actions .block-hint { font-size: 13px; color: var(--pen); font-weight: 600; }

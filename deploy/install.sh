@@ -172,7 +172,7 @@ fi
 info "Menyalin aplikasi ke $WEB_DIR"
 mkdir -p "$WEB_DIR"
 rsync -a --delete \
-  --exclude '.git' --exclude '.github' --exclude '.claude' --exclude 'deploy' --exclude 'server' \
+  --exclude '.git' --exclude '.github' --exclude '.githooks' --exclude '.claude' --exclude 'deploy' --exclude 'server' \
   --exclude '*.md' --exclude '.gitignore' \
   "$SRC_DIR/" "$WEB_DIR/"
 chown -R www-data:www-data "$WEB_DIR"
