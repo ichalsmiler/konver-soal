@@ -109,7 +109,10 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
   const altBoundary = boundary + '-alt';
   const subject = 'Soal ' + mapel + ' - Kelas ' + kelas +
     (semester ? ' - Semester ' + semester : '') + (tahunAjaran ? ' ' + tahunAjaran : '') + ' - ' + nama;
-  const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' });
+  // Singkat: "24/10/2026 14.34" (tanpa detik).
+  const waktu = new Date().toLocaleString('id-ID', {
+    timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).replace(',', '');
   const rows = [
     ['Nama guru', nama],
     ['Mata pelajaran', mapel],
