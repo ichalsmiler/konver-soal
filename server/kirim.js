@@ -9,6 +9,10 @@
  *   SMTP_USER=pengirim@gmail.com   SMTP_PASS=<app password 16 huruf>
  *   MAIL_TO=terimasoal@sman2makassar.sch.id   MAIL_FROM_NAME=Konver Soal
  *   PORT=3091   HOST=127.0.0.1   RATE_PER_HOUR=20
+ *   ADMIN_PASS=<kata sandi admin untuk mengunci semester & tahun ajaran>
+ *
+ * Endpoint:  GET/POST /api/pengaturan  (semester & tahun ajaran yang dikunci admin)
+ *   POST { sandi, kunci, semester, tahunAjaran }  atau  { sandi, cekSandi: true }
  *
  * Endpoint:  POST /api/kirim  (JSON)
  *   { nama, mapel, kelas, fileName, rtf (teks) | rtfBase64, jumlahSoal, perluDicek, namaFileAsli }
@@ -21,6 +25,9 @@ const net = require('net');
 const tls = require('tls');
 const os = require('os');
 const zlib = require('zlib');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const cfg = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -35,6 +42,36 @@ const cfg = {
   listenHost: process.env.HOST || '127.0.0.1',
   ratePerHour: parseInt(process.env.RATE_PER_HOUR || '20', 10),
   maxBytes: 20 * 1024 * 1024, // RTF maks ±20 MB (batas lampiran Gmail 25 MB)
+  adminPass: (process.env.ADMIN_PASS || '').trim(),
+  // systemd StateDirectory= mengisi STATE_DIRECTORY (mis. /var/lib/konver-soal)
+  stateDir: process.env.STATE_DIRECTORY || process.env.STATE_DIR || path.join(__dirname, 'data'),
+};
+
+// ---------- Pengaturan yang dikunci admin (semester & tahun ajaran) ----------
+const RE_SEMESTER = /^(Ganjil|Genap)$/;
+const RE_TA = /^(\d{4})\/(\d{4})$/;
+const settingsFile = () => path.join(cfg.stateDir, 'pengaturan.json');
+
+function readSettings() {
+  try {
+    const s = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    const ok = !!s.kunci && RE_SEMESTER.test(s.semester) && RE_TA.test(s.tahunAjaran);
+    return ok ? { kunci: true, semester: s.semester, tahunAjaran: s.tahunAjaran, diubah: s.diubah || null } : { kunci: false };
+  } catch (e) {
+    return { kunci: false };
+  }
+}
+
+function writeSettings(s) {
+  fs.mkdirSync(cfg.stateDir, { recursive: true });
+  const tmp = settingsFile() + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+  fs.renameSync(tmp, settingsFile());
+}
+
+const sandiCocok = s => {
+  const a = Buffer.from(String(s || '')), b = Buffer.from(cfg.adminPass);
+  return cfg.adminPass.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
 };
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -191,9 +228,54 @@ function reply(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
+// Salah sandi admin: maks 5 kali per 15 menit per IP.
+const gagalAdmin = new Map();
+function adminDiblokir(ip) {
+  const now = Date.now();
+  const list = (gagalAdmin.get(ip) || []).filter(t => now - t < 15 * 60e3);
+  gagalAdmin.set(ip, list);
+  return list.length >= 5;
+}
+
+function pengaturan(req, res, ip) {
+  if (req.method === 'GET') return reply(res, 200, Object.assign({ ok: true, adminAktif: !!cfg.adminPass }, readSettings()));
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, pesan: 'Metode tidak didukung' });
+  if (!cfg.adminPass) return reply(res, 503, { ok: false, pesan: 'Kata sandi admin belum diatur di server (sudo bash deploy/install.sh --update --admin).' });
+  if (adminDiblokir(ip)) return reply(res, 429, { ok: false, pesan: 'Terlalu banyak percobaan sandi. Coba lagi 15 menit lagi.' });
+  const chunks = [];
+  let size = 0;
+  req.on('data', c => { size += c.length; if (size > 4096) req.destroy(); else chunks.push(c); });
+  req.on('end', () => {
+    let b;
+    try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
+    if (!sandiCocok(b.sandi)) {
+      gagalAdmin.get(ip).push(Date.now());
+      log('sandi admin salah', ip);
+      return reply(res, 403, { ok: false, pesan: 'Kata sandi admin salah.' });
+    }
+    if (b.cekSandi) return reply(res, 200, Object.assign({ ok: true }, readSettings()));
+    const kunci = !!b.kunci;
+    if (kunci && (!RE_SEMESTER.test(b.semester) || !RE_TA.test(b.tahunAjaran || ''))) {
+      return reply(res, 400, { ok: false, pesan: 'Pilih semester dan tahun ajaran.' });
+    }
+    const s = kunci
+      ? { kunci: true, semester: b.semester, tahunAjaran: b.tahunAjaran, diubah: new Date().toISOString() }
+      : { kunci: false, diubah: new Date().toISOString() };
+    try { writeSettings(s); } catch (e) {
+      log('gagal simpan pengaturan', e.message);
+      return reply(res, 500, { ok: false, pesan: 'Gagal menyimpan pengaturan di server.' });
+    }
+    log('pengaturan diubah', ip, JSON.stringify(s));
+    reply(res, 200, Object.assign({ ok: true }, readSettings()));
+  });
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/api/kirim/status') {
     return reply(res, 200, { ok: true, siap: !!(cfg.user && cfg.pass), tujuan: cfg.to });
+  }
+  if (req.url === '/api/pengaturan') {
+    return pengaturan(req, res, (req.headers['x-real-ip'] || req.socket.remoteAddress || '').toString());
   }
   if (req.method !== 'POST' || req.url !== '/api/kirim') return reply(res, 404, { ok: false, pesan: 'Tidak ditemukan' });
   if (!cfg.user || !cfg.pass) return reply(res, 503, { ok: false, pesan: 'Pengiriman email belum diatur di server (SMTP_USER/SMTP_PASS).' });
@@ -230,12 +312,19 @@ const server = http.createServer((req, res) => {
       return reply(res, 400, { ok: false, pesan: 'Lampiran bukan file RTF yang valid.' });
     }
     let fileName = safeName(body.fileName);
+    let semester = RE_SEMESTER.test(body.semester) ? body.semester : '';
+    let tahunAjaran = RE_TA.test(body.tahunAjaran || '') ? body.tahunAjaran : '';
+    // Semester & tahun ajaran yang dikunci admin selalu menang (juga untuk aplikasi versi lama di browser).
+    const lock = readSettings();
+    if (lock.kunci && (semester !== lock.semester || tahunAjaran !== lock.tahunAjaran)) {
+      semester = lock.semester;
+      tahunAjaran = lock.tahunAjaran;
+      fileName = safeName([mapel, kelas, semester, tahunAjaran.replace('/', '-')].join('-'));
+    }
     if (!/\.rtf$/i.test(fileName)) fileName += '.rtf';
     try {
       const data = buildMessage({
-        nama, mapel, kelas, fileName, rtf,
-        semester: /^(Ganjil|Genap)$/.test(body.semester) ? body.semester : '',
-        tahunAjaran: /^\d{4}\/\d{4}$/.test(body.tahunAjaran || '') ? body.tahunAjaran : '',
+        nama, mapel, kelas, fileName, rtf, semester, tahunAjaran,
         jumlahSoal: Number.isFinite(body.jumlahSoal) ? body.jumlahSoal : null,
         perluDicek: Number.isFinite(body.perluDicek) ? body.perluDicek : null,
         namaFileAsli: clean(body.namaFileAsli, 160),

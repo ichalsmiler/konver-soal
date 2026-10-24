@@ -10,6 +10,7 @@
 #   sudo bash deploy/install.sh --domain soal.sekolah.sch.id --email admin@sekolah.sch.id   # + HTTPS
 #   sudo bash deploy/install.sh --update                # git pull lalu pasang ulang
 #   sudo bash deploy/install.sh --smtp                  # atur akun Gmail pengirim (fitur Kirim)
+#   sudo bash deploy/install.sh --admin                 # atur kata sandi admin (kunci semester & tahun ajaran)
 #   sudo bash deploy/install.sh --uninstall
 #
 set -euo pipefail
@@ -26,6 +27,7 @@ PORT="80"
 EMAIL=""
 MODE="install"
 SET_SMTP=0
+SET_ADMIN=0
 
 # Layanan "Kirim soal" (email)
 KIRIM_DIR="/usr/local/lib/${APP}"
@@ -50,6 +52,7 @@ Pemakaian: sudo bash deploy/install.sh [opsi]
   --update        git pull lalu pasang ulang (konfigurasi lama dipertahankan)
   --smtp          atur akun Gmail pengirim untuk tombol Kirim (ditanya interaktif)
   --cek-smtp      uji login akun pengirim ke Gmail (tanpa mengirim email)
+  --admin         atur kata sandi admin untuk mengunci semester & tahun ajaran (ditanya interaktif)
   --uninstall     hapus situs dari nginx
 EOF
   exit 0
@@ -62,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --email)     EMAIL="${2:-}"; shift 2 ;;
     --update)    MODE="update"; shift ;;
     --smtp)      SET_SMTP=1; shift ;;
+    --admin)     SET_ADMIN=1; shift ;;
     --cek-smtp)  MODE="cek"; shift ;;
     --uninstall) MODE="uninstall"; shift ;;
     -h|--help)   usage ;;
@@ -227,6 +231,19 @@ if [[ "$SET_SMTP" == "1" || -n "${SMTP_USER:-}" ]]; then
   set_env SMTP_PASS "$SMTP_PASS"
   info "Akun pengirim disimpan di ${KIRIM_ENV} (hanya bisa dibaca root)"
 fi
+if [[ "$SET_ADMIN" == "1" || -n "${ADMIN_PASS:-}" ]]; then
+  if [[ -z "${ADMIN_PASS:-}" ]]; then
+    [[ -r /dev/tty ]] || die "--admin butuh terminal interaktif (atau berikan ADMIN_PASS sebagai variabel)."
+    read -r -s -p "Kata sandi admin baru (min. 8 karakter, tidak tampil): " ADMIN_PASS </dev/tty; echo
+    read -r -s -p "Ulangi kata sandi admin: " ADMIN_PASS2 </dev/tty; echo
+    [[ "$ADMIN_PASS" == "$ADMIN_PASS2" ]] || die "Kata sandi tidak sama."
+  fi
+  ADMIN_PASS="$(printf '%s' "$ADMIN_PASS" | tr -d '[:cntrl:]')"
+  (( ${#ADMIN_PASS} >= 8 )) || die "Kata sandi admin minimal 8 karakter."
+  [[ "$ADMIN_PASS" != *[\"\'\\[:space:]]* ]] || die "Kata sandi admin tidak boleh berisi spasi, tanda kutip, atau garis miring terbalik (\\)."
+  set_env ADMIN_PASS "$ADMIN_PASS"
+  info "Kata sandi admin disimpan di ${KIRIM_ENV} (hanya bisa dibaca root)"
+fi
 
 cat > "/etc/systemd/system/${KIRIM_SERVICE}.service" <<UNIT
 [Unit]
@@ -239,6 +256,8 @@ EnvironmentFile=${KIRIM_ENV}
 ExecStart=$(command -v node) ${KIRIM_DIR}/kirim.js
 Restart=on-failure
 DynamicUser=yes
+# Pengaturan admin (semester & tahun ajaran yang dikunci): /var/lib/${APP}/pengaturan.json
+StateDirectory=${APP}
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -262,6 +281,11 @@ location = /api/kirim {
 }
 location = /api/kirim/status {
     proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim/status;
+}
+location = /api/pengaturan {
+    proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/pengaturan;
+    proxy_set_header X-Real-IP \$remote_addr;
+    add_header Cache-Control "no-store" always;
 }
 NGINX
 
@@ -353,4 +377,9 @@ if grep -q '^SMTP_USER=.\+' "$KIRIM_ENV" && grep -q '^SMTP_PASS=.\+' "$KIRIM_ENV
   if [[ "$SET_SMTP" == "1" ]]; then echo; info "Menguji login akun pengirim..."; cek_smtp || true; fi
 else
   warn "Tombol Kirim belum aktif. Atur akun Gmail pengirim: sudo bash ${SRC_DIR}/deploy/install.sh --update --smtp"
+fi
+if grep -q '^ADMIN_PASS=.\+' "$KIRIM_ENV"; then
+  echo "    Admin     : aktif (kunci semester & tahun ajaran lewat tautan \"Pengaturan admin\" di aplikasi)"
+else
+  warn "Kata sandi admin belum diatur. Atur dengan: sudo bash ${SRC_DIR}/deploy/install.sh --update --admin"
 fi

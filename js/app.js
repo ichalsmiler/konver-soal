@@ -763,6 +763,86 @@
   }
   function closeGuruList() { $('#guruList').hidden = true; $('#kirimNama').setAttribute('aria-expanded', 'false'); }
 
+  // ---------- Semester & tahun ajaran yang dikunci admin (disimpan di server) ----------
+  let lockInfo = null; // { kunci, semester, tahunAjaran, adminAktif }
+  async function loadLock() {
+    if (location.protocol === 'file:') return null;
+    try {
+      const r = await fetch('api/pengaturan', { cache: 'no-store' });
+      lockInfo = r.ok ? await r.json() : null;
+    } catch (e) { lockInfo = null; }
+    return lockInfo;
+  }
+  function applyLock() {
+    const s = lockInfo, locked = !!(s && s.kunci);
+    const sem = $('#kirimSemester'), ta = $('#kirimTA');
+    if (locked) {
+      const y = s.tahunAjaran.slice(0, 4);
+      if (!Array.from(ta.options).some(o => o.value === y)) ta.add(new Option(s.tahunAjaran, y));
+      sem.value = s.semester;
+      ta.value = y;
+    }
+    sem.disabled = ta.disabled = locked;
+    $('#lockNote').hidden = !locked;
+    updateFileName();
+  }
+  const lockLabel = s => s.semester + ' ' + s.tahunAjaran;
+
+  function openAdmin() {
+    const err = $('#adminError');
+    err.hidden = true;
+    $('#adminSandi').value = '';
+    $('#adminSimpan').disabled = true;
+    $('#adminStatus').textContent = 'Memuat pengaturan…';
+    $('#adminDialog').showModal();
+    $('#adminSandi').focus();
+    if (location.protocol === 'file:') {
+      $('#adminStatus').textContent = 'Pengaturan admin hanya bisa dipakai bila aplikasi dibuka dari server sekolah.';
+      return;
+    }
+    loadLock().then(s => {
+      if (!s) { $('#adminStatus').textContent = 'Layanan pengaturan belum terpasang di server.'; return; }
+      $('#adminKunci').checked = !!s.kunci;
+      $('#adminSemester').value = s.kunci ? s.semester : '';
+      $('#adminTA').value = s.kunci ? s.tahunAjaran : '';
+      syncAdminFields();
+      if (!s.adminAktif) {
+        $('#adminStatus').textContent = 'Kata sandi admin belum diatur di server. Jalankan: sudo bash /opt/konver-soal/deploy/install.sh --update --admin';
+        return;
+      }
+      $('#adminStatus').textContent = s.kunci ? 'Saat ini dikunci: ' + lockLabel(s) + '.' : 'Saat ini tidak dikunci: guru memilih semester dan tahun ajaran sendiri.';
+      $('#adminSimpan').disabled = false;
+    });
+  }
+  function syncAdminFields() {
+    const on = $('#adminKunci').checked;
+    $('#adminSemester').disabled = $('#adminTA').disabled = !on;
+  }
+  async function saveAdmin(e) {
+    e.preventDefault();
+    const err = msg => { $('#adminError').textContent = msg; $('#adminError').hidden = false; };
+    const kunci = $('#adminKunci').checked, semester = $('#adminSemester').value, tahunAjaran = $('#adminTA').value;
+    if (kunci && (!semester || !tahunAjaran)) return err('Pilih semester dan tahun ajaran yang akan dikunci.');
+    const btn = $('#adminSimpan');
+    btn.disabled = true;
+    try {
+      const r = await fetch('api/pengaturan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sandi: $('#adminSandi').value, kunci, semester, tahunAjaran }),
+      });
+      let d = {};
+      try { d = await r.json(); } catch (x) { d = {}; }
+      if (!r.ok || !d.ok) throw new Error(d.pesan || 'Gagal menyimpan (kode ' + r.status + ').');
+      lockInfo = Object.assign({}, lockInfo, d);
+      $('#adminDialog').close();
+      toast(d.kunci ? 'Dikunci untuk semua guru: ' + lockLabel(d) : 'Kunci dibuka: guru memilih semester dan tahun ajaran sendiri');
+    } catch (x) {
+      err(x.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function openMeta(mode) {
     metaMode = mode;
     const settings = cfg();
@@ -783,7 +863,9 @@
       if (saved.semester && !$('#kirimSemester').value) $('#kirimSemester').value = saved.semester;
       if (saved.ta && !$('#kirimTA').value) $('#kirimTA').value = saved.ta;
     } catch (e) { /* penyimpanan lokal tidak tersedia */ }
-    updateFileName();
+    // Nilai yang dikunci admin menimpa pilihan tersimpan; diperbarui lagi dari server saat dialog terbuka.
+    applyLock();
+    loadLock().then(applyLock);
     $('#kirimError').hidden = true;
     closeGuruList();
     $('#kirimDialog').showModal();
@@ -899,6 +981,11 @@
   $('#btnKirim').addEventListener('click', () => openMeta('kirim'));
   $('#kirimForm').addEventListener('submit', submitMeta);
   $('#kirimBatal').addEventListener('click', () => $('#kirimDialog').close());
+  document.addEventListener('click', e => { if (e.target.closest('[data-admin]')) openAdmin(); });
+  $('#adminForm').addEventListener('submit', saveAdmin);
+  $('#adminKunci').addEventListener('change', syncAdminFields);
+  $('#adminBatal').addEventListener('click', () => $('#adminDialog').close());
+  $('#adminClose').addEventListener('click', () => $('#adminDialog').close());
   // Soal bisa diubah lagi setelah dialog ditutup: RTF yang sudah disiapkan tidak dipakai ulang.
   $('#kirimDialog').addEventListener('close', () => { rtfJob = null; });
   // Pencarian nama guru

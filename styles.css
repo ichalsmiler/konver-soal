@@ -267,6 +267,14 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
 .kirim-warn p { margin: 6px 0 0; }
 .warn-text { color: var(--pen); font-weight: 600; }
 .kirim-dialog .err { margin: 4px 0 10px; }
+.lock-note { display: flex; align-items: center; gap: 6px; margin: -2px 0 6px; color: var(--ink); font-weight: 500; }
+#kirimSemester:disabled, #kirimTA:disabled { opacity: 1; color: var(--text); background: var(--ink-soft); border-color: var(--ink-soft); cursor: not-allowed; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 2px 0 12px; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--ink); }
+.admin-period select:disabled { opacity: .5; background: var(--paper-tint); border-color: var(--edge); }
+#adminStatus { margin: 6px 0 14px; }
+.admin-link { margin-top: 40px; text-align: center; }
+.admin-link .link-btn, .side .link-btn { color: var(--muted); font-weight: 500; }
 .kirim-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 
 /* Pop-up terkirim: cap stempel */

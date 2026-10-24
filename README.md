@@ -94,6 +94,24 @@ Nama file hasil: `Mapel-Kelas-Semester-TahunAjaran.rtf`, mis. `Ekonomi (Pilihan)
 Daftar guru ada di `js/data-guru.js` (diambil dari Lampiran 2 SK Penulis Soal Semester Ganjil & Genap TP 2025/2026).
 Untuk menambah/mengubah guru, edit file itu: setiap baris `{ "nama": "...", "mapel": "...", "kelas": "X|XI|XII" }`.
 
+### Kunci semester & tahun ajaran (admin)
+
+Admin bisa menetapkan semester dan tahun ajaran yang berlaku, sehingga guru cukup memilih nama (mapel otomatis)
+dan kelas; semester dan tahun ajaran tampil terkunci. Server juga memaksakan nilai ini pada email yang dikirim,
+termasuk dari aplikasi versi lama yang masih tersimpan di browser.
+
+1. Buat kata sandi admin di server (min. 8 karakter, tanpa spasi/tanda kutip):
+
+   ```bash
+   sudo bash /opt/konver-soal/deploy/install.sh --update --admin
+   ```
+
+2. Buka aplikasi, klik **Pengaturan admin** (bawah halaman awal, atau kolom kiri halaman periksa), masukkan kata sandi,
+   centang **Kunci semester dan tahun ajaran untuk semua guru**, pilih semester dan tahun ajaran, lalu **Simpan**.
+   Hapus centang untuk membuka kunci.
+
+Pengaturan disimpan di `/var/lib/konver-soal/pengaturan.json`. Salah sandi 5 kali memblokir percobaan selama 15 menit.
+
 ### Tombol "Kirim" (kirim soal ke terimasoal@sman2makassar.sch.id)
 
 Pengirim: akun **kirimsoal@sman2makassar.sch.id** (diisi saat `--smtp`), penerima: **terimasoal@sman2makassar.sch.id**.
