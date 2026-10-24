@@ -326,7 +326,7 @@
     $('#stats').innerHTML =
       '<div class="stat"><b>' + total + '</b><span>Soal</span></div>' +
       '<div class="stat ok"><b>' + (total - bad.length) + '</b><span>Siap</span></div>' +
-      '<div class="stat warn"><b>' + bad.length + '</b><span>Perlu dicek</span></div>';
+      '<div class="stat' + (bad.length ? ' warn' : '') + '"><b>' + bad.length + '</b><span>Perlu dicek</span></div>';
     $('#issueList').innerHTML = bad.length
       ? bad.map(({ q, iss }) => '<button data-go="' + q.id + '"><b>' + 'No. ' + nums.get(q.id) + '</b>' + escHtml(iss.join(' · ')) + '</button>').join('')
       : '<span class="none">Semua soal sudah lengkap.</span>';

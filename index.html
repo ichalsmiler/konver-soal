@@ -4,22 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Konverter Soal RTF</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M6 2h9l5 5v15a0 0 0 0 1 0 0H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6Zm0-6.8h4v1.6H8V8.6Z"/></svg>
+      <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6.5 2.8h8l4.7 4.7v13.7H6.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M14.5 2.8v4.7h4.7"/><circle cx="9.6" cy="12.4" r="1.2" fill="currentColor"/><path stroke="currentColor" stroke-width="1.6" d="M12.2 12.4h4.3M9.6 16.4h6.9"/></svg>
       <div>
         <strong>Konverter Soal Ujian</strong>
-        <span class="sub">Word → RTF format ujian</span>
+        <span class="sub">Word → RTF siap impor</span>
       </div>
     </div>
     <div class="top-actions" id="topActions" hidden>
       <span class="file-chip" id="fileChip"></span>
       <button class="btn ghost" id="btnReset" type="button">Ganti file</button>
       <span class="block-hint" id="blockHint" hidden></span>
-      <button class="btn primary" id="btnExport" type="button">
+      <button class="btn" id="btnExport" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM5 18h14v2H5v-2Z"/></svg>
         Ekspor RTF
       </button>
@@ -33,14 +36,19 @@
   <main id="start" class="start">
     <section class="hero">
       <h1>Rapikan soal Word jadi format ujian siap impor</h1>
-      <p>Unggah file soal (.docx) dengan format apa pun. Aplikasi mendeteksi nomor soal, opsi a–e, dan kunci jawaban, lalu menyusunnya ulang seperti contoh: <code>Multiple choice</code> → soal bernomor → opsi a–e → <code>ANS: B</code>.</p>
+      <p>Unggah soal pilihan ganda dalam format apa pun. Nomor soal, opsi a–e, dan kunci jawaban dikenali, lalu disusun ulang menjadi <code>1.</code> → <code>a.–e.</code> → <code>ANS: B</code>.</p>
     </section>
 
     <label class="drop" id="drop">
       <input type="file" id="fileInput" accept=".docx,.txt" hidden>
-      <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path fill="currentColor" d="M12 3 7 8h3v6h4V8h3l-5-5ZM5 16v3h14v-3h2v5H3v-5h2Z"/></svg>
+      <span class="drop-sheet" aria-hidden="true">
+        <span class="ghost-line w60"></span>
+        <span class="ghost-opt"><i></i><span class="ghost-line w40"></span></span>
+        <span class="ghost-opt"><i class="on"></i><span class="ghost-line w50"></span></span>
+        <span class="ghost-opt"><i></i><span class="ghost-line w35"></span></span>
+      </span>
       <strong>Pilih atau seret file .docx ke sini</strong>
-      <span>File diproses di browser ini saja, tidak diunggah ke server.</span>
+      <span class="drop-note">File diproses di browser ini, tidak diunggah ke server.</span>
     </label>
 
     <details class="paste">
@@ -52,10 +60,10 @@
     <section class="rules">
       <h2>Yang dirapikan otomatis</h2>
       <ul>
-        <li>Nomor soal <code>1.</code> <code>1)</code> <code>Soal 1.</code> atau numbering Word → dinomori ulang berurutan</li>
-        <li>Opsi <code>A.</code> <code>a)</code> <code>(a)</code>, opsi dalam satu baris, atau numbering huruf → <code>a.</code>–<code>e.</code></li>
-        <li>Kunci dari <code>Kunci: B</code>, <code>Jawaban: b</code>, huruf tunggal, tanda <code>*</code> pada opsi, opsi yang ditebalkan/distabilo, atau daftar <em>Kunci Jawaban</em> di akhir dokumen</li>
-        <li>Kop soal, petunjuk, dan catatan di luar soal dibuang; gambar & format tebal/miring dipertahankan</li>
+        <li>Nomor <code>1.</code> <code>1)</code> <code>Soal 1.</code> atau numbering Word, dinomori ulang berurutan</li>
+        <li>Opsi <code>A.</code> <code>a)</code> <code>(a)</code>, opsi dalam satu baris, atau numbering huruf</li>
+        <li>Kunci dari <code>Kunci: B</code>, tanda <code>*</code>, opsi tebal/distabilo, atau tabel kunci di akhir dokumen</li>
+        <li>Kop, petunjuk, dan catatan dibuang; gambar, tabel, dan rumus dipertahankan</li>
       </ul>
     </section>
     <p class="err" id="startError" hidden></p>
@@ -65,22 +73,26 @@
     <aside class="side">
       <section class="panel stats" id="stats"></section>
 
-      <section class="panel">
-        <h3>Pengaturan ekspor</h3>
-        <label class="field">Judul bagian pilihan ganda
-          <input id="cfgTitle" value="Multiple choice">
-        </label>
-        <label class="field">Jumlah opsi standar
-          <select id="cfgOpt"><option>3</option><option>4</option><option selected>5</option></select>
-        </label>
-        <label class="field">Ukuran huruf
-          <select id="cfgSize"><option>11</option><option selected>12</option><option>14</option></select>
-        </label>
-      </section>
-
       <section class="panel" id="issuePanel">
         <h3>Perlu dicek</h3>
         <div id="issueList" class="issue-list"></div>
+      </section>
+
+      <section class="panel">
+        <details class="settings">
+          <summary>Pengaturan ekspor</summary>
+          <label class="field">Judul bagian pilihan ganda
+            <input id="cfgTitle" value="Multiple choice">
+          </label>
+          <div class="field-row two">
+            <label class="field">Jumlah opsi
+              <select id="cfgOpt"><option>3</option><option>4</option><option selected>5</option></select>
+            </label>
+            <label class="field">Ukuran huruf
+              <select id="cfgSize"><option>11</option><option selected>12</option><option>14</option></select>
+            </label>
+          </div>
+        </details>
       </section>
 
       <section class="panel" id="ignoredPanel">
@@ -99,15 +111,17 @@
             <button type="button" class="on" data-filter="all">Semua</button>
             <button type="button" data-filter="issues">Perlu dicek</button>
           </div>
-          <button class="btn primary sm" type="button" data-add="mc">
+          <button class="btn sm" type="button" data-add="mc">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
             Tambah soal
           </button>
         </div>
-        <span class="hint">Klik teks untuk mengedit · huruf di kiri opsi = kunci · Shift+Enter: baris baru di opsi · Tab: sisipkan tab</span>
+        <span class="hint">Klik teks untuk mengedit · bulatan huruf = kunci · Shift+Enter: baris baru di opsi</span>
       </div>
-      <div id="questions"></div>
-      <button class="btn add-q" type="button" data-add="mc">+ Tambah soal</button>
+      <div class="sheet">
+        <div id="questions"></div>
+        <button class="add-q" type="button" data-add="mc">+ Tambah soal</button>
+      </div>
     </section>
   </div>
 
@@ -116,7 +130,7 @@
   <dialog id="kirimDialog" class="img-dialog kirim-dialog">
     <form id="kirimForm" method="dialog">
       <div class="kirim-warn">
-        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>
         <div>
           <strong>Apakah soal yang Anda kirim sudah diperiksa dengan baik dan benar?</strong>
           <p class="hint" id="kirimInfo"></p>
@@ -162,9 +176,7 @@
   </dialog>
 
   <dialog id="sentDialog" class="img-dialog sent-dialog" aria-labelledby="sentTitle">
-    <div class="sent-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="34" height="34"><path fill="currentColor" d="m9.5 16.2-4.2-4.2-1.4 1.4 5.6 5.6 11-11-1.4-1.4-9.6 9.6Z"/></svg>
-    </div>
+    <div class="stamp" aria-hidden="true"><span>Terkirim</span></div>
     <h2 id="sentTitle">Soal berhasil dikirim</h2>
     <p class="hint" id="sentMsg"></p>
     <dl class="sent-info" id="sentInfo"></dl>
