@@ -1,5 +1,5 @@
 #!/bin/sh
-# Naikkan versi aplikasi setiap commit: 1.1 -> 1.2 -> ... -> 1.10, dst.
+# Naikkan versi aplikasi setiap commit: 1.1 -> 1.2 -> ... -> 1.9 -> 2.0 -> 2.1 -> ... -> 2.9 -> 3.0, dst.
 # Memperbarui file VERSION dan label versi di bilah atas index.html.
 # Aktifkan sekali per clone:  git config core.hooksPath .githooks
 set -e
@@ -10,7 +10,9 @@ git diff --cached --quiet && exit 0
 cur=$(tr -d ' \r\n' < VERSION)
 major=${cur%%.*}
 minor=${cur#*.}
-new="$major.$((minor + 1))"
+minor=$((minor + 1))
+if [ "$minor" -ge 10 ]; then major=$((major + 1)); minor=0; fi
+new="$major.$minor"
 
 printf '%s\n' "$new" > VERSION
 sed -i "s|id=\"appVersion\"\([^>]*\)>V[0-9.]*<|id=\"appVersion\"\1>V$new<|" index.html
