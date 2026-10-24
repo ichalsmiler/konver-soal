@@ -14,7 +14,7 @@
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6.5 2.8h8l4.7 4.7v13.7H6.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M14.5 2.8v4.7h4.7"/><circle cx="9.6" cy="12.4" r="1.2" fill="currentColor"/><path stroke="currentColor" stroke-width="1.6" d="M12.2 12.4h4.3M9.6 16.4h6.9"/></svg>
       <div>
-        <strong>Konverter Soal Ujian <span class="version" id="appVersion" title="Versi aplikasi (naik otomatis setiap perubahan di GitHub)">V1.3</span></strong>
+        <strong>Konverter Soal Ujian <span class="version" id="appVersion" title="Versi aplikasi (naik otomatis setiap perubahan di GitHub)">V1.4</span></strong>
         <span class="sub">Word → RTF</span>
       </div>
     </div>
@@ -73,6 +73,13 @@
     <aside class="side">
       <section class="panel stats" id="stats"></section>
 
+      <div class="panel add-rail">
+        <button class="btn primary add-fab" type="button" data-add="mc">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
+          Tambah soal
+        </button>
+      </div>
+
       <section class="panel" id="issuePanel">
         <h3>Perlu dicek</h3>
         <div id="issueList" class="issue-list"></div>
@@ -117,12 +124,6 @@
       <div class="sheet">
         <div id="questions"></div>
         <button class="add-q" type="button" data-add="mc">+ Tambah soal</button>
-      </div>
-      <div class="add-rail">
-        <button class="btn primary add-fab" type="button" data-add="mc">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
-          Tambah soal
-        </button>
       </div>
     </section>
   </div>

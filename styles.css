@@ -113,7 +113,7 @@ code { font-family: var(--mono); font-size: .86em; background: var(--paper-tint)
 .err { color: var(--pen); background: var(--pen-soft); border-left: 3px solid var(--pen); border-radius: 2px; padding: 10px 14px; margin-top: 16px; }
 
 /* ---------- Ruang kerja: kolom periksa di kiri, kertas di kanan ---------- */
-.work { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 32px; max-width: 1400px; margin: 0 auto; padding: 24px; align-items: start; }
+.work { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 32px; max-width: 1220px; margin: 0 auto; padding: 24px; align-items: start; }
 .side { position: sticky; top: 80px; display: flex; flex-direction: column; max-height: calc(100vh - 100px); overflow: auto; }
 .panel { padding: 14px 2px; border-bottom: 1px solid var(--edge); }
 .panel:first-child { padding-top: 0; }
@@ -148,12 +148,10 @@ code { font-family: var(--mono); font-size: .86em; background: var(--paper-tint)
 .ignored li { margin: 3px 0; overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text); }
 
-/* Kertas di tengah, tombol "Tambah soal" menempel di sisi kanannya (ikut saat digulir). */
-.list { min-width: 0; display: grid; grid-template-columns: minmax(0, 820px) auto; column-gap: 20px; justify-content: center; align-items: start; }
-.list-head { grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
-.list > .sheet { grid-column: 1; width: 100%; margin: 0; }
-.add-rail { grid-column: 2; grid-row: 2; position: sticky; top: 80px; }
-.add-fab { padding: 10px 16px; box-shadow: 0 10px 24px -12px rgba(15, 35, 60, .55); }
+.list { min-width: 0; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 auto 12px; max-width: 820px; }
+/* Tombol "Tambah soal" di kolom kiri (ikut saat digulir); di layar sempit mengambang di kiri bawah. */
+.add-fab { width: 100%; justify-content: center; padding: 10px 16px; }
 .list-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 6px; overflow: hidden; background: var(--paper); }
 .seg button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color .15s, color .15s; }
@@ -301,15 +299,12 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
 
 /* ---------- Layar kecil ---------- */
-/* Tidak cukup ruang di kanan kertas: tombol jadi tombol mengambang di pojok kanan bawah. */
-@media (max-width: 1360px) {
-  .list { grid-template-columns: minmax(0, 820px); padding-bottom: 72px; }
-  .add-rail { position: fixed; top: auto; right: 24px; bottom: 24px; z-index: 30; }
-  .toast { bottom: 88px; }
-}
 @media (max-width: 900px) {
-  .work { grid-template-columns: 1fr; padding: 16px; gap: 20px; }
+  .work { grid-template-columns: 1fr; padding: 16px 16px 88px; gap: 20px; }
   .side { position: static; max-height: none; }
+  .add-rail { position: fixed; left: 16px; bottom: 16px; z-index: 30; padding: 0; border: 0; }
+  .add-fab { width: auto; box-shadow: 0 10px 24px -12px rgba(15, 35, 60, .55); }
+  .toast { bottom: 88px; }
 }
 @media (max-width: 600px) {
   .topbar { padding: 10px 16px; }
@@ -318,9 +313,7 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
   .q::before { left: -12px; }
   .stem { margin-left: 0; }
   .opts, .q-foot, .badges { padding-left: 0; }
-  .field-row { grid-template-columns: 1fr; gap: 0; }
-  .add-rail { right: 16px; bottom: 16px; }
-  .file-chip { display: none; }
+  .field-row { grid-template-columns: 1fr; gap: 0; }  .file-chip { display: none; }
   .list-head .hint { display: none; }
 }
 
