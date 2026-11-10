@@ -705,8 +705,27 @@
 
   // ---------- Konfirmasi Ekspor / Kirim (guru, mapel, kelas, semester, tahun ajaran) ----------
   const META_KEY = 'konver-soal:pengirim';
-  const GURU = (window.DATA_GURU || []).slice();
-  const guruNames = Array.from(new Set(GURU.map(g => g.nama))).sort((a, b) => a.localeCompare(b, 'id'));
+  // Daftar guru = data bawaan (js/data-guru.js) + guru tambahan dari admin (disimpan di server).
+  const GURU_BAWAAN = (window.DATA_GURU || []).slice();
+  let guruTambahan = [];
+  let GURU = GURU_BAWAAN.slice();
+  let guruNames = [];
+  const sameGuru = (a, b) => a.nama === b.nama && a.mapel === b.mapel && a.kelas === b.kelas;
+  function rebuildGuru() {
+    GURU = GURU_BAWAAN.concat(guruTambahan.filter(t => !GURU_BAWAAN.some(g => sameGuru(g, t))));
+    guruNames = Array.from(new Set(GURU.map(g => g.nama))).sort((a, b) => a.localeCompare(b, 'id'));
+    const mapels = Array.from(new Set(GURU.map(g => g.mapel))).sort((a, b) => a.localeCompare(b, 'id'));
+    $('#mapelList').innerHTML = mapels.map(m => '<option value="' + escHtml(m) + '">').join('');
+  }
+  rebuildGuru();
+  async function loadGuru() {
+    if (location.protocol === 'file:') return;
+    try {
+      const r = await fetch('api/guru', { cache: 'no-store' });
+      const d = r.ok ? await r.json() : null;
+      if (d && Array.isArray(d.guru)) { guruTambahan = d.guru; rebuildGuru(); }
+    } catch (e) { /* layanan belum terpasang: pakai data bawaan saja */ }
+  }
   const fold = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   let metaMode = 'export';
   let guruIdx = -1;
@@ -794,6 +813,9 @@
     $('#adminSandi').value = '';
     $('#adminSimpan').disabled = true;
     $('#adminStatus').textContent = 'Memuat pengaturan…';
+    $('#adminGuruError').hidden = true;
+    renderAdminGuru();
+    loadGuru().then(renderAdminGuru);
     $('#adminDialog').showModal();
     $('#adminSandi').focus();
     if (location.protocol === 'file:') {
@@ -814,6 +836,70 @@
       $('#adminSimpan').disabled = false;
     });
   }
+  // ---------- Admin: tambah / hapus nama guru ----------
+  function renderAdminGuru() {
+    const list = guruTambahan.slice().sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+    $('#adminGuruCount').textContent = list.length ? 'Guru tambahan (' + list.length + '):' : '';
+    $('#adminGuruList').innerHTML = list.map(g =>
+      '<li><span>' + escHtml(g.nama) + '<small>' + escHtml(g.mapel) + ' · Kelas ' + escHtml(g.kelas) + '</small></span>' +
+      '<button class="link-btn" type="button" data-hapus-guru="' + escHtml(JSON.stringify(g)) + '">Hapus</button></li>').join('');
+  }
+  async function guruRequest(aksi, g) {
+    const err = $('#adminGuruError');
+    err.hidden = true;
+    if (location.protocol === 'file:') throw new Error('Menambah guru hanya bisa bila aplikasi dibuka dari server sekolah.');
+    if (!$('#adminSandi').value) { $('#adminSandi').focus(); throw new Error('Masukkan kata sandi admin dulu.'); }
+    const r = await fetch('api/guru', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ sandi: $('#adminSandi').value, aksi }, g)),
+    });
+    let d = {};
+    try { d = await r.json(); } catch (x) { d = {}; }
+    if (!r.ok || !d.ok) {
+      throw new Error(d.pesan || (r.status === 404 || r.status === 405
+        ? 'Layanan daftar guru belum terpasang di server. Jalankan install.sh --update.' : 'Gagal menyimpan (kode ' + r.status + ').'));
+    }
+    guruTambahan = d.guru;
+    rebuildGuru();
+    renderAdminGuru();
+  }
+  async function tambahGuru() {
+    const err = msg => { $('#adminGuruError').textContent = msg; $('#adminGuruError').hidden = false; };
+    const g = {
+      nama: $('#adminGuruNama').value.replace(/\s+/g, ' ').trim(),
+      mapel: $('#adminGuruMapel').value.replace(/\s+/g, ' ').trim(),
+      kelas: $('#adminGuruKelas').value,
+    };
+    if (!g.nama || !g.mapel || !g.kelas) return err('Isi nama guru, mata pelajaran, dan kelas.');
+    if (GURU.some(x => sameGuru(x, g))) return err('Guru dengan mapel dan kelas ini sudah ada di daftar.');
+    const btn = $('#adminGuruTambah');
+    btn.disabled = true;
+    try {
+      await guruRequest('tambah', g);
+      $('#adminGuruMapel').value = '';
+      $('#adminGuruKelas').value = '';
+      $('#adminGuruMapel').focus();
+      toast('Ditambahkan: ' + g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ')');
+    } catch (x) {
+      err(x.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  async function hapusGuru(btn) {
+    const g = JSON.parse(btn.dataset.hapusGuru);
+    if (!confirm('Hapus ' + g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ') dari daftar?')) return;
+    btn.disabled = true;
+    try {
+      await guruRequest('hapus', g);
+      toast('Dihapus: ' + g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ')');
+    } catch (x) {
+      $('#adminGuruError').textContent = x.message;
+      $('#adminGuruError').hidden = false;
+      btn.disabled = false;
+    }
+  }
+
   function syncAdminFields() {
     const on = $('#adminKunci').checked;
     $('#adminSemester').disabled = $('#adminTA').disabled = !on;
@@ -866,6 +952,7 @@
     // Nilai yang dikunci admin menimpa pilihan tersimpan; diperbarui lagi dari server saat dialog terbuka.
     applyLock();
     loadLock().then(applyLock);
+    loadGuru();
     $('#kirimError').hidden = true;
     closeGuruList();
     $('#kirimDialog').showModal();
@@ -983,6 +1070,13 @@
   document.addEventListener('click', e => { if (e.target.closest('[data-admin]')) openAdmin(); });
   $('#adminForm').addEventListener('submit', saveAdmin);
   $('#adminKunci').addEventListener('change', syncAdminFields);
+  $('#adminGuruTambah').addEventListener('click', tambahGuru);
+  $('#adminGuruList').addEventListener('click', e => { const b = e.target.closest('[data-hapus-guru]'); if (b) hapusGuru(b); });
+  // Enter di isian guru = Tambah guru (bukan Simpan kunci).
+  ['adminGuruNama', 'adminGuruMapel'].forEach(id => $('#' + id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); tambahGuru(); }
+  }));
+  loadGuru();
   $('#adminBatal').addEventListener('click', () => $('#adminDialog').close());
   $('#adminClose').addEventListener('click', () => $('#adminDialog').close());
   // Soal bisa diubah lagi setelah dialog ditutup: RTF yang sudah disiapkan tidak dipakai ulang.

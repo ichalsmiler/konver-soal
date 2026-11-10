@@ -14,6 +14,9 @@
  * Endpoint:  GET/POST /api/pengaturan  (semester & tahun ajaran yang dikunci admin)
  *   POST { sandi, kunci, semester, tahunAjaran }  atau  { sandi, cekSandi: true }
  *
+ * Endpoint:  GET/POST /api/guru  (guru tambahan dari admin, melengkapi js/data-guru.js)
+ *   POST { sandi, aksi: 'tambah' | 'hapus', nama, mapel, kelas }
+ *
  * Endpoint:  POST /api/kirim  (JSON)
  *   { nama, mapel, kelas, fileName, rtf (teks) | rtfBase64, jumlahSoal, perluDicek, namaFileAsli }
  *   Body boleh dikompres (Content-Encoding: gzip).
@@ -67,6 +70,29 @@ function writeSettings(s) {
   const tmp = settingsFile() + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
   fs.renameSync(tmp, settingsFile());
+}
+
+// ---------- Guru tambahan dari admin (melengkapi js/data-guru.js) ----------
+const RE_KELAS = /^(X|XI|XII)$/;
+const guruFile = () => path.join(cfg.stateDir, 'guru.json');
+const MAX_GURU = 1000;
+
+function readGuru() {
+  try {
+    const list = JSON.parse(fs.readFileSync(guruFile(), 'utf8'));
+    return Array.isArray(list)
+      ? list.filter(g => g && typeof g.nama === 'string' && typeof g.mapel === 'string' && RE_KELAS.test(g.kelas))
+      : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeGuru(list) {
+  fs.mkdirSync(cfg.stateDir, { recursive: true });
+  const tmp = guruFile() + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.renameSync(tmp, guruFile());
 }
 
 const sandiCocok = s => {
@@ -237,8 +263,8 @@ function adminDiblokir(ip) {
   return list.length >= 5;
 }
 
-function pengaturan(req, res, ip) {
-  if (req.method === 'GET') return reply(res, 200, Object.assign({ ok: true, adminAktif: !!cfg.adminPass }, readSettings()));
+// POST admin: baca body JSON kecil, cek kata sandi, lalu panggil handle(body).
+function adminPost(req, res, ip, handle) {
   if (req.method !== 'POST') return reply(res, 405, { ok: false, pesan: 'Metode tidak didukung' });
   if (!cfg.adminPass) return reply(res, 503, { ok: false, pesan: 'Kata sandi admin belum diatur di server (sudo bash deploy/install.sh --update --admin).' });
   if (adminDiblokir(ip)) return reply(res, 429, { ok: false, pesan: 'Terlalu banyak percobaan sandi. Coba lagi 15 menit lagi.' });
@@ -248,11 +274,48 @@ function pengaturan(req, res, ip) {
   req.on('end', () => {
     let b;
     try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
-    if (!sandiCocok(b.sandi)) {
+    if (!b || !sandiCocok(b.sandi)) {
       gagalAdmin.get(ip).push(Date.now());
       log('sandi admin salah', ip);
       return reply(res, 403, { ok: false, pesan: 'Kata sandi admin salah.' });
     }
+    handle(b);
+  });
+}
+
+// GET /api/guru  -> { ok, guru: [{ nama, mapel, kelas }] }
+// POST /api/guru { sandi, aksi: 'tambah' | 'hapus', nama, mapel, kelas }
+function guru(req, res, ip) {
+  if (req.method === 'GET') return reply(res, 200, { ok: true, guru: readGuru() });
+  adminPost(req, res, ip, b => {
+    const g = { nama: clean(b.nama, 80), mapel: clean(b.mapel, 80), kelas: clean(b.kelas, 10) };
+    if (!g.nama || !g.mapel || !RE_KELAS.test(g.kelas)) {
+      return reply(res, 400, { ok: false, pesan: 'Isi nama guru, mata pelajaran, dan kelas (X, XI, atau XII).' });
+    }
+    const same = x => x.nama === g.nama && x.mapel === g.mapel && x.kelas === g.kelas;
+    let list = readGuru();
+    if (b.aksi === 'tambah') {
+      if (list.some(same)) return reply(res, 409, { ok: false, pesan: 'Guru dengan mapel dan kelas ini sudah ada.' });
+      if (list.length >= MAX_GURU) return reply(res, 400, { ok: false, pesan: 'Daftar guru tambahan sudah penuh.' });
+      list.push(g);
+    } else if (b.aksi === 'hapus') {
+      if (!list.some(same)) return reply(res, 404, { ok: false, pesan: 'Data guru tidak ditemukan.' });
+      list = list.filter(x => !same(x));
+    } else {
+      return reply(res, 400, { ok: false, pesan: 'Aksi tidak dikenal.' });
+    }
+    try { writeGuru(list); } catch (e) {
+      log('gagal simpan guru', e.message);
+      return reply(res, 500, { ok: false, pesan: 'Gagal menyimpan daftar guru di server.' });
+    }
+    log('guru ' + b.aksi, ip, g.nama, g.mapel, g.kelas);
+    reply(res, 200, { ok: true, guru: list });
+  });
+}
+
+function pengaturan(req, res, ip) {
+  if (req.method === 'GET') return reply(res, 200, Object.assign({ ok: true, adminAktif: !!cfg.adminPass }, readSettings()));
+  adminPost(req, res, ip, b => {
     if (b.cekSandi) return reply(res, 200, Object.assign({ ok: true }, readSettings()));
     const kunci = !!b.kunci;
     if (kunci && (!RE_SEMESTER.test(b.semester) || !RE_TA.test(b.tahunAjaran || ''))) {
@@ -276,6 +339,9 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === '/api/pengaturan') {
     return pengaturan(req, res, (req.headers['x-real-ip'] || req.socket.remoteAddress || '').toString());
+  }
+  if (req.url === '/api/guru') {
+    return guru(req, res, (req.headers['x-real-ip'] || req.socket.remoteAddress || '').toString());
   }
   if (req.method !== 'POST' || req.url !== '/api/kirim') return reply(res, 404, { ok: false, pesan: 'Tidak ditemukan' });
   if (!cfg.user || !cfg.pass) return reply(res, 503, { ok: false, pesan: 'Pengiriman email belum diatur di server (SMTP_USER/SMTP_PASS).' });

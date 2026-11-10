@@ -287,6 +287,11 @@ location = /api/pengaturan {
     proxy_set_header X-Real-IP \$remote_addr;
     add_header Cache-Control "no-store" always;
 }
+location = /api/guru {
+    proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/guru;
+    proxy_set_header X-Real-IP \$remote_addr;
+    add_header Cache-Control "no-store" always;
+}
 NGINX
 
 # ---------- Konfigurasi nginx ----------

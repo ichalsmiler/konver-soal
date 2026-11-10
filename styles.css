@@ -273,6 +273,19 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
 .check input { width: 16px; height: 16px; accent-color: var(--ink); }
 .admin-period select:disabled { opacity: .5; background: var(--paper-tint); border-color: var(--edge); }
 #adminStatus { margin: 6px 0 14px; }
+#adminDialog { max-height: calc(100vh - 32px); overflow-y: auto; }
+.admin-guru { margin: 6px 0 12px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.admin-guru h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.admin-guru > .hint { margin: 0 0 10px; }
+.field-row.admin-guru-row { grid-template-columns: 1fr 96px; }
+.admin-guru-count { margin: 12px 0 4px; }
+.admin-guru-count:empty { display: none; }
+.admin-guru-list { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; border-top: 1px solid var(--rule); }
+.admin-guru-list:empty { display: none; }
+.admin-guru-list li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.admin-guru-list li span { flex: 1; min-width: 0; }
+.admin-guru-list li small { display: block; color: var(--muted); font-size: 12.5px; }
+.admin-guru-list .link-btn { color: var(--pen); font-weight: 500; flex: none; }
 .admin-link { margin-top: 40px; text-align: center; }
 .admin-link .link-btn, .side .link-btn { color: var(--muted); font-weight: 500; }
 .kirim-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
