@@ -277,15 +277,25 @@ details summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var
 .admin-guru { margin: 6px 0 12px; padding-top: 14px; border-top: 1px solid var(--rule); }
 .admin-guru h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .admin-guru > .hint { margin: 0 0 10px; }
-.field-row.admin-guru-row { grid-template-columns: 1fr 96px; }
-.admin-guru-count { margin: 12px 0 4px; }
+.field-row.admin-guru-row { grid-template-columns: 1fr 96px; }.admin-guru-count { margin: 12px 0 4px; }
 .admin-guru-count:empty { display: none; }
-.admin-guru-list { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; border-top: 1px solid var(--rule); }
+.admin-guru-count { margin-top: 0; }
+.admin-guru-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; border-top: 1px solid var(--rule); }
 .admin-guru-list:empty { display: none; }
-.admin-guru-list li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.admin-guru-list li { display: flex; align-items: center; gap: 12px; padding: 6px 2px; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .admin-guru-list li span { flex: 1; min-width: 0; }
 .admin-guru-list li small { display: block; color: var(--muted); font-size: 12.5px; }
-.admin-guru-list .link-btn { color: var(--pen); font-weight: 500; flex: none; }
+.admin-guru-list .link-btn { flex: none; font-weight: 500; }
+.admin-guru-list .link-btn.danger { color: var(--pen); }
+.admin-guru-list .link-btn.muted { color: var(--muted); }
+.admin-guru-list .tag {
+  font-style: normal; font-size: 11px; font-weight: 600; color: var(--ink); background: var(--ink-soft);
+  border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px;
+}
+.admin-guru-list li.editing { display: block; padding: 10px 10px 12px; margin: 6px 0; background: var(--paper-tint); border: 1px solid var(--edge); border-radius: 4px; }
+.admin-guru-list li.editing .field { margin-bottom: 8px; }
+.admin-guru-list li.editing .check { margin: 0 0 8px; font-size: 13px; }
+.edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .admin-link { margin-top: 40px; text-align: center; }
 .admin-link .link-btn, .side .link-btn { color: var(--muted); font-weight: 500; }
 .kirim-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

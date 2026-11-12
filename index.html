@@ -14,7 +14,7 @@
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6.5 2.8h8l4.7 4.7v13.7H6.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M14.5 2.8v4.7h4.7"/><circle cx="9.6" cy="12.4" r="1.2" fill="currentColor"/><path stroke="currentColor" stroke-width="1.6" d="M12.2 12.4h4.3M9.6 16.4h6.9"/></svg>
       <div>
-        <strong>Konverter Soal Ujian <span class="version" id="appVersion" title="Versi aplikasi (naik otomatis setiap perubahan di GitHub)">V2.2</span></strong>
+        <strong>Konverter Soal Ujian <span class="version" id="appVersion" title="Versi aplikasi (naik otomatis setiap perubahan di GitHub)">V2.3</span></strong>
         <span class="sub">Word → RTF</span>
       </div>
     </div>
@@ -240,7 +240,15 @@
         <datalist id="mapelList"></datalist>
         <p class="err" id="adminGuruError" hidden></p>
         <button class="btn" id="adminGuruTambah" type="button">+ Tambah guru</button>
+      </section>
+      <section class="admin-guru" aria-labelledby="adminDaftarTitle">
+        <h3 id="adminDaftarTitle">Daftar guru</h3>
+        <p class="hint">Klik <b>Edit</b> untuk mengubah nama, mata pelajaran, atau kelas. Perubahan langsung berlaku untuk semua guru.</p>
+        <label class="field">Cari
+          <input id="adminCariGuru" type="search" autocomplete="off" placeholder="Ketik nama guru atau mapel…">
+        </label>
         <p class="hint admin-guru-count" id="adminGuruCount"></p>
+        <p class="err" id="adminDaftarError" hidden></p>
         <ul class="admin-guru-list" id="adminGuruList"></ul>
       </section>
       <p class="err" id="adminError" hidden></p>

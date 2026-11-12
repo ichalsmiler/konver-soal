@@ -15,7 +15,7 @@
  *   POST { sandi, kunci, semester, tahunAjaran }  atau  { sandi, cekSandi: true }
  *
  * Endpoint:  GET/POST /api/guru  (guru tambahan dari admin, melengkapi js/data-guru.js)
- *   POST { sandi, aksi: 'tambah' | 'hapus', nama, mapel, kelas }
+ *   POST { sandi, aksi: 'tambah' | 'hapus' | 'ubah', ... }  (lihat fungsi guru() di bawah)
  *
  * Endpoint:  POST /api/kirim  (JSON)
  *   { nama, mapel, kelas, fileName, rtf (teks) | rtfBase64, jumlahSoal, perluDicek, namaFileAsli }
@@ -77,22 +77,46 @@ const RE_KELAS = /^(X|XI|XII)$/;
 const guruFile = () => path.join(cfg.stateDir, 'guru.json');
 const MAX_GURU = 1000;
 
+// guru.json: { tambahan: [{ nama, mapel, kelas }], koreksi: [{ asal, jadi }] }
+//   tambahan = guru baru dari admin
+//   koreksi  = perubahan pada guru bawaan (js/data-guru.js): asal = baris aslinya, jadi = hasil edit (null = disembunyikan)
+// Format lama (array biasa) dibaca sebagai daftar tambahan.
+const isGuru = g => !!g && typeof g.nama === 'string' && typeof g.mapel === 'string' && RE_KELAS.test(g.kelas);
+const pickGuru = g => ({ nama: g.nama, mapel: g.mapel, kelas: g.kelas });
+const sameGuru = (a, b) => a.nama === b.nama && a.mapel === b.mapel && a.kelas === b.kelas;
+
 function readGuru() {
   try {
-    const list = JSON.parse(fs.readFileSync(guruFile(), 'utf8'));
-    return Array.isArray(list)
-      ? list.filter(g => g && typeof g.nama === 'string' && typeof g.mapel === 'string' && RE_KELAS.test(g.kelas))
-      : [];
+    const d = JSON.parse(fs.readFileSync(guruFile(), 'utf8'));
+    const tambahan = Array.isArray(d) ? d : (d && d.tambahan) || [];
+    const koreksi = (!Array.isArray(d) && d && Array.isArray(d.koreksi)) ? d.koreksi : [];
+    return {
+      tambahan: tambahan.filter(isGuru).map(pickGuru),
+      koreksi: koreksi.filter(k => k && isGuru(k.asal) && (k.jadi === null || isGuru(k.jadi)))
+        .map(k => ({ asal: pickGuru(k.asal), jadi: k.jadi && pickGuru(k.jadi) })),
+    };
   } catch (e) {
-    return [];
+    return { tambahan: [], koreksi: [] };
   }
 }
 
-function writeGuru(list) {
+function writeGuru(data) {
   fs.mkdirSync(cfg.stateDir, { recursive: true });
   const tmp = guruFile() + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, guruFile());
+}
+
+// Ubah (jadi = baris baru) atau hapus (jadi = null) satu baris guru, tambahan ataupun bawaan.
+function terapkanUbah(data, asal, jadi) {
+  const i = data.tambahan.findIndex(x => sameGuru(x, asal));
+  if (i >= 0) {
+    if (jadi) data.tambahan[i] = jadi; else data.tambahan.splice(i, 1);
+    return;
+  }
+  const k = data.koreksi.findIndex(x => sameGuru(x.asal, asal));
+  if (jadi && sameGuru(jadi, asal)) { if (k >= 0) data.koreksi.splice(k, 1); return; } // kembali ke data asli
+  if (k >= 0) data.koreksi[k].jadi = jadi; else data.koreksi.push({ asal, jadi });
 }
 
 const sandiCocok = s => {
@@ -264,13 +288,13 @@ function adminDiblokir(ip) {
 }
 
 // POST admin: baca body JSON kecil, cek kata sandi, lalu panggil handle(body).
-function adminPost(req, res, ip, handle) {
+function adminPost(req, res, ip, handle, maxBytes = 4096) {
   if (req.method !== 'POST') return reply(res, 405, { ok: false, pesan: 'Metode tidak didukung' });
   if (!cfg.adminPass) return reply(res, 503, { ok: false, pesan: 'Kata sandi admin belum diatur di server (sudo bash deploy/install.sh --update --admin).' });
   if (adminDiblokir(ip)) return reply(res, 429, { ok: false, pesan: 'Terlalu banyak percobaan sandi. Coba lagi 15 menit lagi.' });
   const chunks = [];
   let size = 0;
-  req.on('data', c => { size += c.length; if (size > 4096) req.destroy(); else chunks.push(c); });
+  req.on('data', c => { size += c.length; if (size > maxBytes) req.destroy(); else chunks.push(c); });
   req.on('end', () => {
     let b;
     try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
@@ -283,34 +307,49 @@ function adminPost(req, res, ip, handle) {
   });
 }
 
-// GET /api/guru  -> { ok, guru: [{ nama, mapel, kelas }] }
-// POST /api/guru { sandi, aksi: 'tambah' | 'hapus', nama, mapel, kelas }
+// GET /api/guru  -> { ok, guru: [tambahan], koreksi: [{ asal, jadi }] }
+// POST /api/guru { sandi, aksi, ... }
+//   aksi 'tambah' : { nama, mapel, kelas }
+//   aksi 'hapus'  : { asal }                       (atau { nama, mapel, kelas } dari versi lama)
+//   aksi 'ubah'   : { perubahan: [{ asal, jadi }] } (mis. ganti nama guru di semua mapelnya sekaligus)
 function guru(req, res, ip) {
-  if (req.method === 'GET') return reply(res, 200, { ok: true, guru: readGuru() });
+  const balas = data => reply(res, 200, { ok: true, guru: data.tambahan, koreksi: data.koreksi });
+  if (req.method === 'GET') return balas(readGuru());
   adminPost(req, res, ip, b => {
-    const g = { nama: clean(b.nama, 80), mapel: clean(b.mapel, 80), kelas: clean(b.kelas, 10) };
-    if (!g.nama || !g.mapel || !RE_KELAS.test(g.kelas)) {
-      return reply(res, 400, { ok: false, pesan: 'Isi nama guru, mata pelajaran, dan kelas (X, XI, atau XII).' });
-    }
-    const same = x => x.nama === g.nama && x.mapel === g.mapel && x.kelas === g.kelas;
-    let list = readGuru();
+    const rapikan = x => x && ({ nama: clean(x.nama, 80), mapel: clean(x.mapel, 80), kelas: clean(x.kelas, 10) });
+    const salah = () => reply(res, 400, { ok: false, pesan: 'Isi nama guru, mata pelajaran, dan kelas (X, XI, atau XII).' });
+    const valid = g => !!g && !!g.nama && !!g.mapel && RE_KELAS.test(g.kelas);
+    const data = readGuru();
+    let catatan;
     if (b.aksi === 'tambah') {
-      if (list.some(same)) return reply(res, 409, { ok: false, pesan: 'Guru dengan mapel dan kelas ini sudah ada.' });
-      if (list.length >= MAX_GURU) return reply(res, 400, { ok: false, pesan: 'Daftar guru tambahan sudah penuh.' });
-      list.push(g);
+      const g = rapikan(b);
+      if (!valid(g)) return salah();
+      if (data.tambahan.some(x => sameGuru(x, g))) return reply(res, 409, { ok: false, pesan: 'Guru dengan mapel dan kelas ini sudah ada.' });
+      if (data.tambahan.length >= MAX_GURU) return reply(res, 400, { ok: false, pesan: 'Daftar guru tambahan sudah penuh.' });
+      data.tambahan.push(g);
+      catatan = [g.nama, g.mapel, g.kelas];
     } else if (b.aksi === 'hapus') {
-      if (!list.some(same)) return reply(res, 404, { ok: false, pesan: 'Data guru tidak ditemukan.' });
-      list = list.filter(x => !same(x));
+      const asal = rapikan(b.asal || b);
+      if (!valid(asal)) return salah();
+      terapkanUbah(data, asal, null);
+      catatan = [asal.nama, asal.mapel, asal.kelas];
+    } else if (b.aksi === 'ubah') {
+      const list = Array.isArray(b.perubahan) ? b.perubahan.slice(0, 50) : [];
+      const ubah = list.map(p => ({ asal: rapikan(p && p.asal), jadi: rapikan(p && p.jadi) }));
+      if (!ubah.length || !ubah.every(p => valid(p.asal) && valid(p.jadi))) return salah();
+      ubah.forEach(p => terapkanUbah(data, p.asal, p.jadi));
+      if (data.koreksi.length > MAX_GURU) return reply(res, 400, { ok: false, pesan: 'Terlalu banyak perubahan tersimpan.' });
+      catatan = ubah.map(p => p.asal.nama + ' / ' + p.asal.mapel + ' ' + p.asal.kelas + ' -> ' + p.jadi.nama + ' / ' + p.jadi.mapel + ' ' + p.jadi.kelas);
     } else {
       return reply(res, 400, { ok: false, pesan: 'Aksi tidak dikenal.' });
     }
-    try { writeGuru(list); } catch (e) {
+    try { writeGuru(data); } catch (e) {
       log('gagal simpan guru', e.message);
       return reply(res, 500, { ok: false, pesan: 'Gagal menyimpan daftar guru di server.' });
     }
-    log('guru ' + b.aksi, ip, g.nama, g.mapel, g.kelas);
-    reply(res, 200, { ok: true, guru: list });
-  });
+    log('guru ' + b.aksi, ip, ...catatan);
+    balas(data);
+  }, 64 * 1024);
 }
 
 function pengaturan(req, res, ip) {

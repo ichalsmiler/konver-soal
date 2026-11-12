@@ -705,14 +705,26 @@
 
   // ---------- Konfirmasi Ekspor / Kirim (guru, mapel, kelas, semester, tahun ajaran) ----------
   const META_KEY = 'konver-soal:pengirim';
-  // Daftar guru = data bawaan (js/data-guru.js) + guru tambahan dari admin (disimpan di server).
+  // Daftar guru = data bawaan (js/data-guru.js) yang sudah dikoreksi admin + guru tambahan dari admin.
+  // Koreksi & tambahan disimpan di server. Tiap baris menyimpan `asal` (baris aslinya) untuk edit/hapus.
   const GURU_BAWAAN = (window.DATA_GURU || []).slice();
   let guruTambahan = [];
-  let GURU = GURU_BAWAAN.slice();
+  let guruKoreksi = []; // [{ asal, jadi }]; jadi null = disembunyikan
+  let GURU = [];
   let guruNames = [];
   const sameGuru = (a, b) => a.nama === b.nama && a.mapel === b.mapel && a.kelas === b.kelas;
+  const pickGuru = g => ({ nama: g.nama, mapel: g.mapel, kelas: g.kelas });
   function rebuildGuru() {
-    GURU = GURU_BAWAAN.concat(guruTambahan.filter(t => !GURU_BAWAAN.some(g => sameGuru(g, t))));
+    const rows = [];
+    GURU_BAWAAN.forEach(b => {
+      const k = guruKoreksi.find(x => sameGuru(x.asal, b));
+      if (k && !k.jadi) return;
+      rows.push(Object.assign(pickGuru(k ? k.jadi : b), { asal: pickGuru(b), sumber: k ? 'diubah' : 'bawaan' }));
+    });
+    guruTambahan.forEach(t => {
+      if (!rows.some(r => sameGuru(r, t))) rows.push(Object.assign(pickGuru(t), { asal: pickGuru(t), sumber: 'tambahan' }));
+    });
+    GURU = rows;
     guruNames = Array.from(new Set(GURU.map(g => g.nama))).sort((a, b) => a.localeCompare(b, 'id'));
     const mapels = Array.from(new Set(GURU.map(g => g.mapel))).sort((a, b) => a.localeCompare(b, 'id'));
     $('#mapelList').innerHTML = mapels.map(m => '<option value="' + escHtml(m) + '">').join('');
@@ -723,7 +735,7 @@
     try {
       const r = await fetch('api/guru', { cache: 'no-store' });
       const d = r.ok ? await r.json() : null;
-      if (d && Array.isArray(d.guru)) { guruTambahan = d.guru; rebuildGuru(); }
+      if (d && Array.isArray(d.guru)) { guruTambahan = d.guru; guruKoreksi = d.koreksi || []; rebuildGuru(); }
     } catch (e) { /* layanan belum terpasang: pakai data bawaan saja */ }
   }
   const fold = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -813,7 +825,9 @@
     $('#adminSandi').value = '';
     $('#adminSimpan').disabled = true;
     $('#adminStatus').textContent = 'Memuat pengaturan…';
-    $('#adminGuruError').hidden = true;
+    $('#adminGuruError').hidden = $('#adminDaftarError').hidden = true;
+    guruEdit = null;
+    $('#adminCariGuru').value = '';
     renderAdminGuru();
     loadGuru().then(renderAdminGuru);
     $('#adminDialog').showModal();
@@ -836,22 +850,52 @@
       $('#adminSimpan').disabled = false;
     });
   }
-  // ---------- Admin: tambah / hapus nama guru ----------
+  // ---------- Admin: tambah / edit / hapus nama guru ----------
+  let guruEdit = null; // asal baris yang sedang diedit
+  const asalKey = g => JSON.stringify(pickGuru(g.asal || g));
+  const LABEL_SUMBER = { tambahan: 'Tambahan', diubah: 'Diubah' };
   function renderAdminGuru() {
-    const list = guruTambahan.slice().sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
-    $('#adminGuruCount').textContent = list.length ? 'Guru tambahan (' + list.length + '):' : '';
-    $('#adminGuruList').innerHTML = list.map(g =>
-      '<li><span>' + escHtml(g.nama) + '<small>' + escHtml(g.mapel) + ' · Kelas ' + escHtml(g.kelas) + '</small></span>' +
-      '<button class="link-btn" type="button" data-hapus-guru="' + escHtml(JSON.stringify(g)) + '">Hapus</button></li>').join('');
+    const q = fold($('#adminCariGuru').value || '');
+    const semua = GURU.slice().sort((a, b) => a.nama.localeCompare(b.nama, 'id') || a.mapel.localeCompare(b.mapel, 'id'));
+    const hits = semua.filter(g => !q || fold(g.nama + ' ' + g.mapel + ' ' + g.kelas).includes(q));
+    const shown = hits.slice(0, 100);
+    $('#adminGuruCount').textContent = q
+      ? hits.length + ' dari ' + semua.length + ' baris cocok' + (hits.length > shown.length ? ' (100 pertama ditampilkan)' : '')
+      : semua.length + ' baris guru' + (semua.length > shown.length ? '. Ketik di kotak cari untuk menemukan guru lain.' : '');
+    $('#adminGuruList').innerHTML = shown.map(g => {
+      const key = escHtml(asalKey(g));
+      if (guruEdit && asalKey(g) === guruEdit) {
+        const lain = GURU.filter(x => x.nama === g.nama && !sameGuru(x, g)).length;
+        return '<li class="editing" data-key="' + key + '">' +
+          '<label class="field">Nama guru<input data-e="nama" maxlength="80" value="' + escHtml(g.nama) + '"></label>' +
+          '<div class="field-row admin-guru-row">' +
+            '<label class="field">Mata pelajaran<input data-e="mapel" maxlength="80" list="mapelList" value="' + escHtml(g.mapel) + '"></label>' +
+            '<label class="field">Kelas<select data-e="kelas">' + ['X', 'XI', 'XII'].map(k =>
+              '<option' + (k === g.kelas ? ' selected' : '') + '>' + k + '</option>').join('') + '</select></label>' +
+          '</div>' +
+          (lain ? '<label class="check"><input type="checkbox" data-e="semua" checked> Ganti nama juga di ' + lain +
+            ' mapel/kelas lain milik guru ini</label>' : '') +
+          '<div class="edit-actions"><button class="btn" type="button" data-g="batal">Batal</button>' +
+          '<button class="btn primary" type="button" data-g="simpan">Simpan perubahan</button></div></li>';
+      }
+      const tag = LABEL_SUMBER[g.sumber] ? ' <em class="tag">' + LABEL_SUMBER[g.sumber] + '</em>' : '';
+      return '<li data-key="' + key + '"><span>' + escHtml(g.nama) + tag +
+        '<small>' + escHtml(g.mapel) + ' · Kelas ' + escHtml(g.kelas) + '</small></span>' +
+        (g.sumber === 'diubah' ? '<button class="link-btn muted" type="button" data-g="asli" title="Kembalikan ke data asli: ' +
+          escHtml(g.asal.nama + ' — ' + g.asal.mapel + ' · Kelas ' + g.asal.kelas) + '">Kembalikan</button>' : '') +
+        '<button class="link-btn" type="button" data-g="edit">Edit</button>' +
+        '<button class="link-btn danger" type="button" data-g="hapus">Hapus</button></li>';
+    }).join('');
+    const first = $('#adminGuruList li.editing input');
+    if (first && document.activeElement && !document.activeElement.closest('#adminGuruList li.editing')) first.focus();
   }
-  async function guruRequest(aksi, g) {
-    const err = $('#adminGuruError');
-    err.hidden = true;
-    if (location.protocol === 'file:') throw new Error('Menambah guru hanya bisa bila aplikasi dibuka dari server sekolah.');
-    if (!$('#adminSandi').value) { $('#adminSandi').focus(); throw new Error('Masukkan kata sandi admin dulu.'); }
+  async function guruRequest(aksi, data) {
+    $('#adminGuruError').hidden = $('#adminDaftarError').hidden = true;
+    if (location.protocol === 'file:') throw new Error('Mengubah daftar guru hanya bisa bila aplikasi dibuka dari server sekolah.');
+    if (!$('#adminSandi').value) { $('#adminSandi').focus(); throw new Error('Masukkan kata sandi admin dulu (kolom paling atas).'); }
     const r = await fetch('api/guru', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ sandi: $('#adminSandi').value, aksi }, g)),
+      body: JSON.stringify(Object.assign({ sandi: $('#adminSandi').value, aksi }, data)),
     });
     let d = {};
     try { d = await r.json(); } catch (x) { d = {}; }
@@ -860,8 +904,68 @@
         ? 'Layanan daftar guru belum terpasang di server. Jalankan install.sh --update.' : 'Gagal menyimpan (kode ' + r.status + ').'));
     }
     guruTambahan = d.guru;
+    guruKoreksi = d.koreksi || [];
     rebuildGuru();
     renderAdminGuru();
+  }
+  const guruErr = msg => { $('#adminDaftarError').textContent = msg; $('#adminDaftarError').hidden = false; };
+  const guruLabel = g => g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ')';
+  async function simpanEditGuru(li, g) {
+    const val = k => li.querySelector('[data-e="' + k + '"]');
+    const baru = {
+      nama: val('nama').value.replace(/\s+/g, ' ').trim(),
+      mapel: val('mapel').value.replace(/\s+/g, ' ').trim(),
+      kelas: val('kelas').value,
+    };
+    if (!baru.nama) { val('nama').focus(); return guruErr('Nama guru tidak boleh kosong.'); }
+    if (!baru.mapel) { val('mapel').focus(); return guruErr('Mata pelajaran tidak boleh kosong.'); }
+    const perubahan = [{ asal: g.asal, jadi: baru }];
+    // Ganti nama di baris lain milik guru yang sama (mapel/kelas lain) bila dicentang.
+    const semua = val('semua');
+    if (semua && semua.checked && baru.nama !== g.nama) {
+      GURU.filter(x => x.nama === g.nama && !sameGuru(x, g))
+        .forEach(x => perubahan.push({ asal: x.asal, jadi: { nama: baru.nama, mapel: x.mapel, kelas: x.kelas } }));
+    }
+    const sisa = GURU.filter(x => !perubahan.some(p => sameGuru(p.asal, x.asal)));
+    if (perubahan.some(p => sisa.some(x => sameGuru(x, p.jadi)))) {
+      return guruErr('Sudah ada guru dengan nama, mapel, dan kelas yang sama.');
+    }
+    if (perubahan.length === 1 && sameGuru(baru, g)) { guruEdit = null; return renderAdminGuru(); }
+    li.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    try {
+      await guruRequest('ubah', { perubahan });
+      guruEdit = null;
+      renderAdminGuru();
+      toast('Disimpan: ' + guruLabel(baru) + (perubahan.length > 1 ? ' + ' + (perubahan.length - 1) + ' baris lain' : ''));
+    } catch (x) {
+      guruErr(x.message);
+      li.querySelectorAll('button').forEach(b => { b.disabled = false; });
+    }
+  }
+  async function onAdminGuruClick(e) {
+    const b = e.target.closest('[data-g]');
+    if (!b) return;
+    const li = b.closest('li');
+    const g = GURU.find(x => asalKey(x) === li.dataset.key);
+    if (!g) return;
+    $('#adminDaftarError').hidden = true;
+    const act = b.dataset.g;
+    if (act === 'edit') { guruEdit = asalKey(g); return renderAdminGuru(); }
+    if (act === 'batal') { guruEdit = null; return renderAdminGuru(); }
+    if (act === 'simpan') return simpanEditGuru(li, g);
+    if (act === 'asli') {
+      if (GURU.some(x => !sameGuru(x.asal, g.asal) && sameGuru(x, g.asal))) return guruErr('Data asli bentrok dengan guru lain yang sudah ada.');
+      b.disabled = true;
+      try { await guruRequest('ubah', { perubahan: [{ asal: g.asal, jadi: g.asal }] }); toast('Dikembalikan: ' + guruLabel(g.asal)); }
+      catch (x) { guruErr(x.message); b.disabled = false; }
+      return;
+    }
+    if (act === 'hapus') {
+      if (!confirm('Hapus ' + guruLabel(g) + ' dari daftar guru?')) return;
+      b.disabled = true;
+      try { await guruRequest('hapus', { asal: g.asal }); toast('Dihapus: ' + guruLabel(g)); }
+      catch (x) { guruErr(x.message); b.disabled = false; }
+    }
   }
   async function tambahGuru() {
     const err = msg => { $('#adminGuruError').textContent = msg; $('#adminGuruError').hidden = false; };
@@ -870,7 +974,15 @@
       mapel: $('#adminGuruMapel').value.replace(/\s+/g, ' ').trim(),
       kelas: $('#adminGuruKelas').value,
     };
-    if (!g.nama || !g.mapel || !g.kelas) return err('Isi nama guru, mata pelajaran, dan kelas.');
+    // Sebutkan kolom yang masih kosong dan arahkan kursor ke sana.
+    const kosong = [['nama', 'nama guru', '#adminGuruNama'], ['mapel', 'mata pelajaran', '#adminGuruMapel'], ['kelas', 'kelas', '#adminGuruKelas']]
+      .filter(([k]) => !g[k]);
+    if (kosong.length) {
+      $(kosong[0][2]).focus();
+      const daftar = kosong.map(k => k[1]);
+      const teks = daftar.length > 1 ? daftar.slice(0, -1).join(', ') + ' dan ' + daftar[daftar.length - 1] : daftar[0];
+      return err(kosong.length === 1 && kosong[0][0] === 'kelas' ? 'Pilih kelas (X, XI, atau XII).' : 'Belum diisi: ' + teks + '.');
+    }
     if (GURU.some(x => sameGuru(x, g))) return err('Guru dengan mapel dan kelas ini sudah ada di daftar.');
     const btn = $('#adminGuruTambah');
     btn.disabled = true;
@@ -883,19 +995,6 @@
     } catch (x) {
       err(x.message);
     } finally {
-      btn.disabled = false;
-    }
-  }
-  async function hapusGuru(btn) {
-    const g = JSON.parse(btn.dataset.hapusGuru);
-    if (!confirm('Hapus ' + g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ') dari daftar?')) return;
-    btn.disabled = true;
-    try {
-      await guruRequest('hapus', g);
-      toast('Dihapus: ' + g.nama + ' (' + g.mapel + ', kelas ' + g.kelas + ')');
-    } catch (x) {
-      $('#adminGuruError').textContent = x.message;
-      $('#adminGuruError').hidden = false;
       btn.disabled = false;
     }
   }
@@ -1071,7 +1170,16 @@
   $('#adminForm').addEventListener('submit', saveAdmin);
   $('#adminKunci').addEventListener('change', syncAdminFields);
   $('#adminGuruTambah').addEventListener('click', tambahGuru);
-  $('#adminGuruList').addEventListener('click', e => { const b = e.target.closest('[data-hapus-guru]'); if (b) hapusGuru(b); });
+  $('#adminGuruList').addEventListener('click', onAdminGuruClick);
+  $('#adminGuruList').addEventListener('keydown', e => {
+    const li = e.target.closest('li.editing');
+    if (!li || !(e.key === 'Enter' || e.key === 'Escape')) return;
+    e.preventDefault();
+    e.stopPropagation(); // Escape tidak menutup dialog, Enter tidak menyimpan kunci semester
+    li.querySelector('[data-g="' + (e.key === 'Enter' ? 'simpan' : 'batal') + '"]').click();
+  });
+  $('#adminCariGuru').addEventListener('input', () => { guruEdit = null; renderAdminGuru(); });
+  $('#adminCariGuru').addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
   // Enter di isian guru = Tambah guru (bukan Simpan kunci).
   ['adminGuruNama', 'adminGuruMapel'].forEach(id => $('#' + id).addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); tambahGuru(); }

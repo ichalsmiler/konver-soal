@@ -96,8 +96,13 @@ Untuk menambah/mengubah guru, edit file itu: setiap baris `{ "nama": "...", "map
 
 Admin juga bisa menambah guru tanpa mengedit file: **Pengaturan admin** → isi kata sandi → bagian **Tambah nama guru**
 (nama, mata pelajaran, kelas) → **+ Tambah guru**. Guru dengan beberapa mapel/kelas ditambahkan satu per satu.
-Guru tambahan tampil di bawahnya dan bisa dihapus. Daftar ini disimpan di server (`/var/lib/konver-soal/guru.json`)
-dan langsung dipakai semua guru; data di `js/data-guru.js` tetap berlaku.
+Di bagian **Daftar guru** (dengan kotak cari), setiap guru, baik dari daftar bawaan maupun tambahan, bisa di-**Edit**
+(nama, mata pelajaran, kelas) atau di-**Hapus**. Saat mengganti nama guru yang punya beberapa mapel/kelas, centang
+"Ganti nama juga di … mapel/kelas lain" agar semua barisnya ikut berubah. Guru bawaan yang diedit diberi tanda
+**Diubah** dan bisa di-**Kembalikan** ke data aslinya.
+
+Semua perubahan disimpan di server (`/var/lib/konver-soal/guru.json`) dan langsung dipakai semua guru. File
+`js/data-guru.js` tidak diubah; perubahan admin diterapkan di atasnya.
 
 ### Kunci semester & tahun ajaran (admin)
 
