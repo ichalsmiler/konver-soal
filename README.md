@@ -94,7 +94,7 @@ Nama file hasil: `Mapel-Kelas-Semester-TahunAjaran.rtf`, mis. `Ekonomi (Pilihan)
 Daftar guru ada di `js/data-guru.js` (diambil dari Lampiran 2 SK Penulis Soal Semester Ganjil & Genap TP 2025/2026).
 Untuk menambah/mengubah guru, edit file itu: setiap baris `{ "nama": "...", "mapel": "...", "kelas": "X|XI|XII" }`.
 
-Admin juga bisa menambah guru tanpa mengedit file: **Pengaturan admin** → isi kata sandi → bagian **Tambah nama guru**
+Admin juga bisa menambah guru tanpa mengedit file: **Pengaturan admin** → isi kata sandi → **Masuk** → bagian **Tambah nama guru**
 (nama, mata pelajaran, kelas) → **+ Tambah guru**. Guru dengan beberapa mapel/kelas ditambahkan satu per satu.
 Di bagian **Daftar guru** (dengan kotak cari), setiap guru, baik dari daftar bawaan maupun tambahan, bisa di-**Edit**
 (nama, mata pelajaran, kelas) atau di-**Hapus**. Saat mengganti nama guru yang punya beberapa mapel/kelas, centang
@@ -116,8 +116,8 @@ termasuk dari aplikasi versi lama yang masih tersimpan di browser.
    sudo bash /opt/konver-soal/deploy/install.sh --update --admin
    ```
 
-2. Buka aplikasi, klik **Pengaturan admin** (bawah halaman awal, atau kolom kiri halaman periksa), masukkan kata sandi,
-   centang **Kunci semester dan tahun ajaran untuk semua guru**, pilih semester dan tahun ajaran, lalu **Simpan kunci**.
+2. Buka aplikasi, klik **Pengaturan admin** (bawah halaman awal, atau kolom kiri halaman periksa), masukkan kata sandi
+   lalu **Masuk** (menu admin baru tampil setelah sandi dicek benar oleh server), centang **Kunci semester dan tahun ajaran untuk semua guru**, pilih semester dan tahun ajaran, lalu **Simpan kunci**.
    Hapus centang untuk membuka kunci.
 
 Pengaturan disimpan di `/var/lib/konver-soal/pengaturan.json`. Salah sandi 5 kali memblokir percobaan selama 15 menit.

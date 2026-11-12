@@ -819,36 +819,69 @@
   }
   const lockLabel = s => s.semester + ' ' + s.tahunAjaran;
 
+  // Pengaturan admin dibuka dua langkah: (1) kata sandi dicek server, (2) baru menu admin tampil.
+  // Sandi tetap disimpan di kolomnya (tersembunyi) selama dialog terbuka, untuk menyimpan perubahan.
   function openAdmin() {
-    const err = $('#adminError');
-    err.hidden = true;
     $('#adminSandi').value = '';
-    $('#adminSimpan').disabled = true;
-    $('#adminStatus').textContent = 'Memuat pengaturan…';
-    $('#adminGuruError').hidden = $('#adminDaftarError').hidden = true;
-    guruEdit = null;
-    $('#adminCariGuru').value = '';
-    renderAdminGuru();
-    loadGuru().then(renderAdminGuru);
+    $('#adminLogin').hidden = false;
+    $('#adminMenu').hidden = true;
+    $('#adminLoginError').hidden = true;
+    $('#adminLoginInfo').textContent = 'Masukkan kata sandi admin untuk membuka pengaturan.';
+    $('#adminMasuk').disabled = false;
     $('#adminDialog').showModal();
     $('#adminSandi').focus();
-    if (location.protocol === 'file:') {
-      $('#adminStatus').textContent = 'Pengaturan admin hanya bisa dipakai bila aplikasi dibuka dari server sekolah.';
-      return;
-    }
+    const tutup = msg => { $('#adminLoginInfo').textContent = msg; $('#adminMasuk').disabled = true; };
+    if (location.protocol === 'file:') return tutup('Pengaturan admin hanya bisa dipakai bila aplikasi dibuka dari server sekolah.');
     loadLock().then(s => {
-      if (!s) { $('#adminStatus').textContent = 'Layanan pengaturan belum terpasang di server.'; return; }
-      $('#adminKunci').checked = !!s.kunci;
-      $('#adminSemester').value = s.kunci ? s.semester : '';
-      $('#adminTA').value = s.kunci ? s.tahunAjaran : '';
-      syncAdminFields();
-      if (!s.adminAktif) {
-        $('#adminStatus').textContent = 'Kata sandi admin belum diatur di server. Jalankan: sudo bash /opt/konver-soal/deploy/install.sh --update --admin';
-        return;
-      }
-      $('#adminStatus').textContent = s.kunci ? 'Saat ini dikunci: ' + lockLabel(s) + '.' : 'Saat ini tidak dikunci: guru memilih semester dan tahun ajaran sendiri.';
-      $('#adminSimpan').disabled = false;
+      if (!s) return tutup('Layanan pengaturan belum terpasang di server.');
+      if (!s.adminAktif) return tutup('Kata sandi admin belum diatur di server. Jalankan: sudo bash /opt/konver-soal/deploy/install.sh --update --admin');
     });
+  }
+  function showLockStatus(s) {
+    $('#adminKunci').checked = !!s.kunci;
+    $('#adminSemester').value = s.kunci ? s.semester : '';
+    $('#adminTA').value = s.kunci ? s.tahunAjaran : '';
+    syncAdminFields();
+    $('#adminStatus').textContent = s.kunci
+      ? 'Saat ini dikunci: ' + lockLabel(s) + '.'
+      : 'Saat ini tidak dikunci: guru memilih semester dan tahun ajaran sendiri.';
+  }
+  async function loginAdmin(e) {
+    e.preventDefault();
+    if (!$('#adminMenu').hidden) return; // Enter di dalam menu tidak mengirim ulang sandi
+    const err = msg => { $('#adminLoginError').textContent = msg; $('#adminLoginError').hidden = false; };
+    $('#adminLoginError').hidden = true;
+    if (!$('#adminSandi').value) { $('#adminSandi').focus(); return err('Masukkan kata sandi admin.'); }
+    const btn = $('#adminMasuk');
+    btn.disabled = true;
+    btn.textContent = 'Memeriksa…';
+    try {
+      const r = await fetch('api/pengaturan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sandi: $('#adminSandi').value, cekSandi: true }),
+      });
+      let d = {};
+      try { d = await r.json(); } catch (x) { d = {}; }
+      if (!r.ok || !d.ok) throw new Error(d.pesan || 'Gagal memeriksa kata sandi (kode ' + r.status + ').');
+      // Sandi benar: tampilkan menu admin.
+      lockInfo = Object.assign({}, lockInfo, d);
+      showLockStatus(d);
+      $('#adminError').hidden = $('#adminGuruError').hidden = $('#adminDaftarError').hidden = true;
+      guruEdit = null;
+      $('#adminCariGuru').value = '';
+      renderAdminGuru();
+      loadGuru().then(renderAdminGuru);
+      $('#adminLogin').hidden = true;
+      $('#adminMenu').hidden = false;
+      $('#adminDialog').scrollTop = 0;
+      $('#adminKunci').focus();
+    } catch (x) {
+      err(x.message);
+      $('#adminSandi').select();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+    }
   }
   // ---------- Admin: tambah / edit / hapus nama guru ----------
   let guruEdit = null; // asal baris yang sedang diedit
@@ -1003,8 +1036,8 @@
     const on = $('#adminKunci').checked;
     $('#adminSemester').disabled = $('#adminTA').disabled = !on;
   }
-  async function saveAdmin(e) {
-    e.preventDefault();
+  async function saveAdmin() {
+    $('#adminError').hidden = true;
     const err = msg => { $('#adminError').textContent = msg; $('#adminError').hidden = false; };
     const kunci = $('#adminKunci').checked, semester = $('#adminSemester').value, tahunAjaran = $('#adminTA').value;
     if (kunci && (!semester || !tahunAjaran)) return err('Pilih semester dan tahun ajaran yang akan dikunci.');
@@ -1019,7 +1052,7 @@
       try { d = await r.json(); } catch (x) { d = {}; }
       if (!r.ok || !d.ok) throw new Error(d.pesan || 'Gagal menyimpan (kode ' + r.status + ').');
       lockInfo = Object.assign({}, lockInfo, d);
-      $('#adminDialog').close();
+      showLockStatus(d);
       toast(d.kunci ? 'Dikunci untuk semua guru: ' + lockLabel(d) : 'Kunci dibuka: guru memilih semester dan tahun ajaran sendiri');
     } catch (x) {
       err(x.message);
@@ -1167,7 +1200,11 @@
   $('#kirimForm').addEventListener('submit', submitMeta);
   $('#kirimBatal').addEventListener('click', () => $('#kirimDialog').close());
   document.addEventListener('click', e => { if (e.target.closest('[data-admin]')) openAdmin(); });
-  $('#adminForm').addEventListener('submit', saveAdmin);
+  $('#adminForm').addEventListener('submit', loginAdmin);
+  $('#adminSimpan').addEventListener('click', saveAdmin);
+  $('#adminKeluar').addEventListener('click', () => $('#adminDialog').close());
+  // Sandi tidak ditinggalkan di halaman setelah dialog ditutup.
+  $('#adminDialog').addEventListener('close', () => { $('#adminSandi').value = ''; });
   $('#adminKunci').addEventListener('change', syncAdminFields);
   $('#adminGuruTambah').addEventListener('click', tambahGuru);
   $('#adminGuruList').addEventListener('click', onAdminGuruClick);

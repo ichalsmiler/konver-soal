@@ -1,6 +1,6 @@
 #!/bin/sh
 # Naikkan versi aplikasi setiap commit: 1.1 -> 1.2 -> ... -> 1.9 -> 2.0 -> 2.1 -> ... -> 2.9 -> 3.0, dst.
-# Memperbarui file VERSION dan label versi di bilah atas index.html.
+# Memperbarui file VERSION, label versi di bilah atas index.html, dan ?v= pada alamat file JS/CSS.
 # Aktifkan sekali per clone:  git config core.hooksPath .githooks
 set -e
 cd "$(git rev-parse --show-toplevel)"
@@ -17,6 +17,10 @@ new="$major.$minor"
 printf '%s\n' "$new" > VERSION
 sed -i "s|id=\"appVersion\"\([^>]*\)>V[0-9.]*<|id=\"appVersion\"\1>V$new<|" index.html
 grep -q ">V$new<" index.html || { echo "pre-commit: label versi di index.html tidak ditemukan" >&2; exit 1; }
+# Nomor versi di alamat file JS/CSS (app.js?v=2.4) agar browser mengambil file baru setelah update,
+# bukan salinan lama dari cache (nginx menyimpan .js/.css di browser selama 1 jam).
+sed -i -E "s#((src|href)=\"(js|lib)/[^\"?]+\.js|href=\"styles\.css)(\?v=[0-9.]*)?\"#\1?v=$new\"#g" index.html
+grep -q "js/app.js?v=$new\"" index.html || { echo "pre-commit: nomor versi pada js/app.js di index.html tidak ditemukan" >&2; exit 1; }
 
 git add VERSION index.html
 echo "Versi aplikasi: V$cur -> V$new"
