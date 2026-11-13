@@ -14,6 +14,7 @@
 #   sudo bash deploy/install.sh --uninstall
 #
 set -euo pipefail
+ORIG_ARGS=("$@")   # untuk menjalankan ulang skrip versi baru setelah git pull (--update)
 
 APP="konver-soal"
 REPO_URL="${REPO_URL:-https://github.com/ichalsmiler/konver-soal.git}"
@@ -155,12 +156,21 @@ fi
 
 if [[ "$MODE" == "update" ]]; then
   [[ -d "$SRC_DIR/.git" ]] || die "$SRC_DIR bukan folder git, tidak bisa update."
-  info "Mengambil versi terbaru (git pull) di $SRC_DIR"
   RUN_USER="$(stat -c %U "$SRC_DIR")"   # jalankan git sebagai pemilik folder
-  if [[ "$RUN_USER" != "root" ]]; then
-    sudo -u "$RUN_USER" git -C "$SRC_DIR" pull --ff-only
-  else
-    git_auth -c safe.directory="$SRC_DIR" -C "$SRC_DIR" pull --ff-only
+  if [[ -z "${KONVER_SOAL_SUDAH_PULL:-}" ]]; then
+    info "Mengambil versi terbaru (git pull) di $SRC_DIR"
+    before="$(sha256sum "$SRC_DIR/deploy/install.sh" | cut -d' ' -f1)"
+    if [[ "$RUN_USER" != "root" ]]; then
+      sudo -u "$RUN_USER" git -C "$SRC_DIR" pull --ff-only
+    else
+      git_auth -c safe.directory="$SRC_DIR" -C "$SRC_DIR" pull --ff-only
+    fi
+    # Skrip ini sendiri ikut berubah: jalankan ulang versi barunya, agar langkah berikutnya
+    # (mis. konfigurasi nginx) memakai isi terbaru, bukan isi lama yang sudah terbaca bash.
+    if [[ "$(sha256sum "$SRC_DIR/deploy/install.sh" | cut -d' ' -f1)" != "$before" ]]; then
+      info "install.sh ikut diperbarui, menjalankan ulang versi terbarunya"
+      KONVER_SOAL_SUDAH_PULL=1 exec bash "$SRC_DIR/deploy/install.sh" "${ORIG_ARGS[@]}"
+    fi
   fi
   # Pakai konfigurasi yang sudah ada bila opsi tidak diberikan ulang.
   if [[ -f "$SITE_FILE" ]]; then

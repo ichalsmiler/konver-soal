@@ -138,9 +138,10 @@ Email berisi dua lampiran: **file RTF** dan **file Word asli dari guru dalam .zi
 soal ditempel sebagai teks). Soal bergambar bisa menghasilkan lampiran beberapa MB; layanan menunggu hingga
 15 menit (putus bila koneksi ke Gmail diam 2 menit), dan tombol menampilkan "Mengirim … MB… bisa beberapa menit".
 
-Gambar di RTF disimpan dua kali, seperti Word: PNG/JPEG untuk program modern dan cadangan WMF untuk ExamView
-(yang hanya membaca WMF). Cadangan WMF memakai palet warna (4-bit atau 8-bit), bukan 24-bit, sehingga RTF
-soal bergambar sekitar separuh ukuran sebelumnya.
+Gambar di RTF hanya disimpan sebagai WMF, karena ExamView (pembaca RTF ini) hanya membaca WMF. WMF memakai
+palet warna, bukan 24-bit: gambar abu-abu dan diagram 4-bit (16 warna, termasuk warna peralihan agar tepi huruf
+tetap halus), foto 8-bit (256 warna dengan dithering). Contoh: soal Fisika XII dengan 70 gambar turun dari
+14,2 MB menjadi 3,7 MB.
 
 Soal pilihan ganda baru bisa ditambahkan dari tombol **Tambah soal** di atas atau di bawah daftar soal, atau ikon
 **+** pada tiap soal (disisipkan tepat di bawah soal itu).

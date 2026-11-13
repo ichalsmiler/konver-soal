@@ -37,23 +37,75 @@
   }
 
   /**
-   * Palet maks. 256 warna untuk gambar berwarna (agar DIB 4/8-bit, bukan 24-bit: 3-6x lebih kecil).
-   * Bila warnanya <= 256 (diagram, grafik) dipakai persis; bila lebih (foto) diringkas dengan median cut.
+   * Palet untuk gambar berwarna (DIB 4/8-bit, bukan 24-bit):
+   *  - <= 16 warna: warna persis, 4-bit
+   *  - diagram/grafik (16 warna terbanyak menutup >= 70% piksel; sisanya warna peralihan di tepi
+   *    garis/huruf): 16 warna terbanyak, 4-bit
+   *  - foto (warna tersebar; pada soal Fisika XII 16 warna terbanyak hanya ±25%):
+   *    diringkas ke 256 warna dengan dithering, 8-bit
    * @returns { palette: [[r,g,b]...], index: Uint8Array w*h }
    */
   function makePalette(rgb, w) {
     const n = rgb.length / 3;
-    const exact = new Map();
-    for (let i = 0; i < n && exact.size <= 256; i++) {
+    const count = new Map();
+    for (let i = 0; i < n; i++) {
       const k = (rgb[i * 3] << 16) | (rgb[i * 3 + 1] << 8) | rgb[i * 3 + 2];
-      if (!exact.has(k)) exact.set(k, exact.size);
+      count.set(k, (count.get(k) || 0) + 1);
     }
     const index = new Uint8Array(n);
-    if (exact.size <= 256) {
-      for (let i = 0; i < n; i++) index[i] = exact.get((rgb[i * 3] << 16) | (rgb[i * 3 + 1] << 8) | rgb[i * 3 + 2]);
-      return { palette: Array.from(exact.keys(), k => [k >> 16, (k >> 8) & 255, k & 255]), index };
+    if (count.size <= 16) {
+      const pos = new Map(Array.from(count.keys(), (k, i) => [k, i]));
+      for (let i = 0; i < n; i++) index[i] = pos.get((rgb[i * 3] << 16) | (rgb[i * 3 + 1] << 8) | rgb[i * 3 + 2]);
+      return { palette: Array.from(count.keys(), k => [k >> 16, (k >> 8) & 255, k & 255]), index };
     }
-    // Median cut pada histogram 5-5-5 bit.
+    const popular = Array.from(count.entries()).sort((a, b) => b[1] - a[1]).slice(0, 16);
+    const top16 = popular.reduce((a, e) => a + e[1], 0);
+    if (top16 / n < 0.7) {
+      // Foto
+      const palette = medianCut(rgb, 256);
+      ditherInto(rgb, w, palette, index);
+      return { palette, index };
+    }
+    // Diagram: warna utama (latar + tinta yang benar-benar berbeda) ditambah warna peralihan
+    // latar->tinta, seperti 16 tingkat abu-abu Word, agar tepi huruf/garis tetap halus.
+    const palette = diagramPalette(count);
+    const near = nearestFn(palette);
+    for (let i = 0; i < n; i++) index[i] = near(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]);
+    return { palette, index };
+  }
+
+  /** 16 warna untuk diagram: latar, s.d. 5 tinta berbeda, dan peralihan latar->tinta. */
+  function diagramPalette(count) {
+    const rgbOf = k => [k >> 16, (k >> 8) & 255, k & 255];
+    const dist = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    const sorted = Array.from(count.entries()).sort((a, b) => b[1] - a[1]).map(e => rgbOf(e[0]));
+    const inks = [];
+    for (const c of sorted) {
+      if (inks.length >= 5) break;
+      if (inks.every(p => dist(p, c) >= 80 * 80)) inks.push(c);
+    }
+    const bg = inks[0], palette = inks.slice();
+    const others = inks.slice(1);
+    if (others.length) {
+      const steps = Math.min(4, Math.floor((16 - inks.length) / others.length));
+      for (const ink of others) {
+        for (let s = 1; s <= steps; s++) {
+          const t = s / (steps + 1);
+          palette.push(bg.map((v, c) => Math.round(v + (ink[c] - v) * t)));
+        }
+      }
+    }
+    // Sisa slot: warna yang sering muncul berikutnya dan belum terwakili.
+    for (const c of sorted) {
+      if (palette.length >= 16) break;
+      if (palette.every(p => dist(p, c) >= 24 * 24)) palette.push(c);
+    }
+    return palette;
+  }
+
+  /** Median cut pada histogram 5-5-5 bit; warna palet = rata-rata piksel asli di tiap kotak. */
+  function medianCut(rgb, maxColors) {
+    const n = rgb.length / 3;
     const key15 = i => ((rgb[i * 3] >> 3) << 10) | ((rgb[i * 3 + 1] >> 3) << 5) | (rgb[i * 3 + 2] >> 3);
     const hist = new Uint32Array(32768);
     for (let i = 0; i < n; i++) hist[key15(i)]++;
@@ -61,7 +113,7 @@
     for (let k = 0; k < 32768; k++) if (hist[k]) cells.push(k);
     const ch = (k, c) => (k >> (10 - c * 5)) & 31;
     let boxes = [cells];
-    while (boxes.length < 256) {
+    while (boxes.length < maxColors) {
       // Belah kotak dengan rentang warna terlebar.
       let best = -1, bestRange = 0, bestCh = 0;
       boxes.forEach((b, bi) => {
@@ -79,20 +131,20 @@
       for (; cut < b.length - 1; cut++) { acc += hist[b[cut - 1]]; if (acc >= total / 2) break; }
       boxes.splice(best, 1, b.slice(0, cut), b.slice(cut));
     }
-    const palette = boxes.map(b => {
-      let r = 0, g = 0, bl = 0, t = 0;
-      for (const k of b) { const c = hist[k]; r += ch(k, 0) * c; g += ch(k, 1) * c; bl += ch(k, 2) * c; t += c; }
-      return [r, g, bl].map(v => Math.min(255, Math.round((v / t) * 8 + 4)));
-    });
-    ditherInto(rgb, w, palette, index);
-    return { palette, index };
+    const box = new Uint16Array(32768);
+    boxes.forEach((b, bi) => { for (const k of b) box[k] = bi; });
+    const sum = boxes.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i++) {
+      const s = sum[box[key15(i)]];
+      s[0] += rgb[i * 3]; s[1] += rgb[i * 3 + 1]; s[2] += rgb[i * 3 + 2]; s[3]++;
+    }
+    return sum.map(s => [0, 1, 2].map(c => Math.round(s[c] / s[3])));
   }
 
-  // Floyd-Steinberg: sebar selisih warna ke piksel tetangga, agar gradasi foto tidak tampak bergaris.
-  function ditherInto(rgb, w, palette, index) {
-    const n = rgb.length / 3, h = n / w;
+  /** Cari warna palet terdekat (di-cache per warna 15-bit). */
+  function nearestFn(palette) {
     const cache = new Int16Array(32768).fill(-1);
-    const nearest = (r, g, b) => {
+    return (r, g, b) => {
       const k = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
       if (cache[k] >= 0) return cache[k];
       let best = 0, bd = Infinity;
@@ -102,6 +154,12 @@
       }
       return (cache[k] = best);
     };
+  }
+
+  // Floyd-Steinberg: sebar selisih warna ke piksel tetangga, agar gradasi foto tidak tampak bergaris.
+  function ditherInto(rgb, w, palette, index) {
+    const n = rgb.length / 3, h = n / w;
+    const nearest = nearestFn(palette);
     let cur = new Float32Array(w * 3), next = new Float32Array(w * 3);
     const clamp = v => (v < 0 ? 0 : v > 255 ? 255 : v);
     for (let y = 0; y < h; y++) {

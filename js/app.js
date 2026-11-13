@@ -553,7 +553,7 @@
   }
 
   // ---------- Cadangan WMF untuk ExamView ----------
-  // ExamView hanya membaca gambar WMF ({\nonshppict}); PNG/JPEG ditolak (error -4).
+  // ExamView hanya membaca gambar WMF; PNG/JPEG ditolak (error -4). RtfWriter menulis WMF ini saja.
   // Gambar abu-abu: DIB 4-bit hingga 2x ukuran tampil; berwarna (foto): DIB 24-bit di ukuran tampil.
   const wmfCache = new WeakMap();
   async function addWmf(img) {

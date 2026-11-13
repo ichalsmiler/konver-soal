@@ -121,11 +121,12 @@
     const goal = '\\picwgoal' + w + '\\pichgoal' + h;
     const himetric = '\\picw' + Math.round(w * 2540 / 1440) + '\\pich' + Math.round(h * 2540 / 1440);
     if (img.type === 'png' || img.type === 'jpeg') {
-      const blip = '{\\pict' + (img.type === 'png' ? '\\pngblip' : '\\jpegblip') +
+      // Untuk ExamView (yang hanya membaca WMF) cukup gambar WMF saja: salinan PNG/JPEG tidak
+      // dipakai ExamView dan hanya menambah ukuran RTF (soal bergambar bisa beberapa MB lebih besar).
+      // Ditulis sama seperti gambar WMF bawaan dokumen di bawah.
+      if (img.wmf) return '{\\pict\\wmetafile8' + himetric + goal + '\n' + b64ToHex(img.wmf) + '}';
+      return '{\\pict' + (img.type === 'png' ? '\\pngblip' : '\\jpegblip') +
         '\\picw' + (img.pxW || Math.round(w / 15)) + '\\pich' + (img.pxH || Math.round(h / 15)) + goal + '\n' + b64ToHex(img.b64) + '}';
-      // Seperti Word: PNG/JPEG untuk program modern + cadangan WMF untuk pembaca lama (ExamView).
-      if (img.wmf) return '{\\*\\shppict' + blip + '}{\\nonshppict{\\pict\\wmetafile8' + himetric + goal + '\n' + b64ToHex(img.wmf) + '}}';
-      return blip;
     }
     if (img.type === 'emf') return '{\\pict\\emfblip' + himetric + goal + '\n' + b64ToHex(img.b64) + '}';
     if (img.type === 'wmf') return '{\\pict\\wmetafile8' + himetric + goal + '\n' + b64ToHex(stripPlaceable(img.b64)) + '}';
