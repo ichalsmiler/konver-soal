@@ -43,7 +43,7 @@
       else if (ext === 'doc') throw new Error('File .doc (Word 97–2003) belum didukung. Buka file di Word, lalu Simpan Sebagai → Dokumen Word (.docx).');
       else if (ext === 'rtf') throw new Error('Untuk file .rtf, buka di Word lalu Simpan Sebagai .docx, kemudian unggah lagi.');
       else throw new Error('Format file tidak dikenali. Gunakan .docx.');
-      await processLines(lines, file.name);
+      await processLines(lines, file.name, file);
     } catch (e) {
       console.error(e);
       showError(e.message || 'Gagal membaca file.');
@@ -83,7 +83,8 @@
     }
   }
 
-  async function processLines(lines, name) {
+  // srcFile: file Word asli yang diunggah guru (ikut dikirim dalam .zip saat Kirim); null untuk teks tempelan.
+  async function processLines(lines, name, srcFile = null) {
     const res = ExamParser.parse(lines, { optCount: cfg().optCount });
     // Aplikasi khusus pilihan ganda: soal di bagian Essay/Uraian tidak diekspor, cukup ditampilkan
     // di "Teks di luar soal".
@@ -100,6 +101,7 @@
     state.questions = res.questions.map(q => Object.assign({ id: ++uid }, q));
     state.ignored = res.ignored;
     state.name = name;
+    state.srcFile = srcFile;
     $('#start').hidden = true;
     $('#work').hidden = false;
     $('#topActions').hidden = false;
@@ -1124,7 +1126,9 @@
     btn.textContent = 'Menyiapkan file…';
     try {
       const rtf = await startRtf();
-      btn.textContent = 'Mengirim…';
+      // File besar (banyak gambar) butuh beberapa menit untuk diteruskan server ke email: beri tahu guru.
+      const mb = (rtf.length + (state.srcFile ? state.srcFile.size : 0)) / 1048576;
+      btn.textContent = mb >= 3 ? 'Mengirim ' + mb.toFixed(1).replace('.', ',') + ' MB… bisa beberapa menit' : 'Mengirim…';
       const settings = cfg();
       const payload = {
         nama, mapel, kelas, semester, tahunAjaran, fileName, namaFileAsli: state.name,
@@ -1138,6 +1142,15 @@
           bin += String.fromCharCode.apply(null, Array.from(rtf.slice(i, i + 0x8000), ch => ch.charCodeAt(0) & 0xFF));
         }
         payload.rtfBase64 = btoa(bin);
+      }
+      // File Word asli ikut dikirim (server melampirkannya sebagai .zip di samping RTF).
+      if (state.srcFile && state.srcFile.size <= 15 * 1048576) {
+        payload.asliBase64 = await new Promise((ok, no) => {
+          const fr = new FileReader();
+          fr.onload = () => ok(String(fr.result).split(',')[1] || '');
+          fr.onerror = () => no(new Error('File asli tidak bisa dibaca. Unggah ulang file Word-nya.'));
+          fr.readAsDataURL(state.srcFile);
+        });
       }
       const res = await fetch('api/kirim', Object.assign({ method: 'POST' }, await jsonBody(payload)));
       let data = {};

@@ -127,6 +127,8 @@ const sandiCocok = s => {
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 // ---------- SMTP (minimal: TLS langsung / STARTTLS, AUTH LOGIN) ----------
+const SMTP_IDLE_MS = 120 * 1000;     // koneksi diam selama ini = gagal
+const SMTP_MAX_MS = 15 * 60 * 1000;  // batas total satu pengiriman
 function smtpSend({ from, to, data }) {
   return new Promise((resolve, reject) => {
     let sock = cfg.secure
@@ -134,8 +136,12 @@ function smtpSend({ from, to, data }) {
       : net.connect(cfg.port, cfg.host);
     let buf = '';
     let waiter = null;
-    const timer = setTimeout(() => fail(new Error('SMTP timeout')), 60000);
+    // Batas waktu: putus bila koneksi DIAM 2 menit (tidak ada data masuk/keluar), atau total lebih dari 15 menit.
+    // (Dulu batasnya 60 detik untuk seluruh pengiriman, sehingga lampiran besar - mis. soal dengan
+    //  banyak gambar, ±20 MB - selalu gagal "SMTP timeout" di koneksi internet sekolah.)
+    const timer = setTimeout(() => fail(new Error('SMTP timeout (lebih dari 15 menit)')), SMTP_MAX_MS);
     const fail = err => { clearTimeout(timer); try { sock.destroy(); } catch (e) { /* abaikan */ } reject(err); };
+    const onIdle = () => fail(new Error('SMTP timeout (koneksi ke server email diam ' + SMTP_IDLE_MS / 1000 + ' detik)'));
 
     const onData = chunk => {
       buf += chunk.toString('utf8');
@@ -150,13 +156,20 @@ function smtpSend({ from, to, data }) {
         }
       }
     };
-    const attach = s => { s.on('data', onData); s.on('error', fail); };
+    const attach = s => { s.on('data', onData); s.on('error', fail); s.setTimeout(SMTP_IDLE_MS); s.on('timeout', onIdle); };
     attach(sock);
 
     const expect = (code) => new Promise((res, rej) => {
       waiter = resp => (resp.startsWith(String(code)) ? res(resp) : rej(new Error('SMTP: ' + resp.split('\n').pop())));
     });
     const cmd = (line, code) => { const p = expect(code); sock.write(line + '\r\n'); return p; };
+    // Isi email ditulis per potongan 64 KB (menunggu 'drain'), agar penghitung "koneksi diam"
+    // terus diperbarui selama lampiran besar diunggah.
+    const writeChunked = async text => {
+      for (let i = 0; i < text.length; i += 65536) {
+        if (!sock.write(text.slice(i, i + 65536))) await new Promise(r => sock.once('drain', r));
+      }
+    };
 
     (async () => {
       await expect(220);
@@ -179,7 +192,9 @@ function smtpSend({ from, to, data }) {
       await cmd('RCPT TO:<' + to + '>', 250);
       await cmd('DATA', 354);
       // Titik di awal baris digandakan (dot-stuffing)
-      await cmd(data.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..') + '\r\n.', 250);
+      const done = expect(250);
+      await writeChunked(data.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..') + '\r\n.\r\n');
+      await done;
       await cmd('QUIT', 221).catch(() => {});
       clearTimeout(timer);
       sock.end();
@@ -188,12 +203,51 @@ function smtpSend({ from, to, data }) {
   });
 }
 
+// ---------- ZIP (satu file, deflate) untuk melampirkan file Word asli dari guru ----------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(fileName, data) {
+  const name = Buffer.from(fileName, 'utf8');
+  const comp = zlib.deflateRawSync(data, { level: 9 });
+  const crc = crc32(data);
+  const d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  const head = (sig, central) => {
+    const b = Buffer.alloc(central ? 46 : 30);
+    let p = 0;
+    const u16 = v => { b.writeUInt16LE(v, p); p += 2; };
+    const u32 = v => { b.writeUInt32LE(v >>> 0, p); p += 4; };
+    u32(sig);
+    if (central) u16(20);              // versi pembuat
+    u16(20); u16(0x0800); u16(8);      // versi, flag UTF-8, deflate
+    u16(time); u16(date); u32(crc); u32(comp.length); u32(data.length);
+    u16(name.length); u16(0);
+    if (central) { u16(0); u16(0); u16(0); u32(0); u32(0); } // komentar, disk, atribut, offset 0
+    return Buffer.concat([b, name]);
+  };
+  const local = head(0x04034B50, false);
+  const central = head(0x02014B50, true);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054B50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length, 12); end.writeUInt32LE(local.length + comp.length, 16);
+  return Buffer.concat([local, comp, central, end]);
+}
+
 // ---------- Pesan MIME ----------
 const encWord = s => '=?UTF-8?B?' + Buffer.from(s, 'utf8').toString('base64') + '?=';
 const wrap76 = s => s.replace(/(.{76})/g, '$1\r\n');
 const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf, jumlahSoal, perluDicek, namaFileAsli }) {
+function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf, asli, jumlahSoal, perluDicek, namaFileAsli }) {
   const boundary = 'ks-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   const altBoundary = boundary + '-alt';
   const subject = 'Soal ' + mapel + ' - Kelas ' + kelas +
@@ -213,10 +267,19 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
     ['File asli', namaFileAsli || '-'],
     ['Waktu kirim', waktu + ' WITA'],
   ];
+  // Lampiran: file RTF apa adanya + file Word asli dari guru di dalam .zip (bila ikut dikirim).
+  const atts = [{ name: fileName, type: 'application/rtf', data: rtf }];
+  if (asli && asli.length) {
+    const namaAsli = safeName(namaFileAsli || 'file-asli.docx');
+    atts.push({ name: namaAsli.replace(/\.[^.]*$/, '') + '.zip', type: 'application/zip', data: makeZip(namaAsli, asli) });
+  }
+  const catatan = atts.length > 1
+    ? 'Terlampir: file RTF dan file asli dari guru (dalam .zip).'
+    : 'File RTF terlampir.';
   // Teks biasa: sejajar bila dibaca dengan huruf monospace.
   const width = Math.max(...rows.map(r => r[0].length));
   const text = ['Kiriman soal dari aplikasi Konver Soal.', '']
-    .concat(rows.map(([k, v]) => k.padEnd(width) + ' : ' + v), ['', 'File RTF terlampir.'])
+    .concat(rows.map(([k, v]) => k.padEnd(width) + ' : ' + v), ['', catatan])
     .join('\r\n');
   // HTML: tabel, sehingga titik dua tetap sejajar di Gmail/Outlook (huruf proporsional).
   const td = 'padding:3px 0;vertical-align:top;';
@@ -225,7 +288,7 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
     '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
     rows.map(([k, v]) => '<tr><td style="' + td + 'white-space:nowrap;color:#5a6576">' + escHtml(k) + '</td>' +
       '<td style="' + td + 'padding:3px 8px;">:</td><td style="' + td + 'font-weight:bold">' + escHtml(v) + '</td></tr>').join('') +
-    '</table><p style="margin:12px 0 0">File RTF terlampir.</p></body></html>';
+    '</table><p style="margin:12px 0 0">' + escHtml(catatan) + '</p></body></html>';
   return [
     'From: ' + encWord(cfg.fromName) + ' <' + cfg.user + '>',
     'To: <' + cfg.to + '>',
@@ -248,12 +311,14 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
     '',
     wrap76(Buffer.from(html, 'utf8').toString('base64')),
     '--' + altBoundary + '--',
-    '--' + boundary,
-    'Content-Type: application/rtf; name="' + fileName + '"',
-    'Content-Transfer-Encoding: base64',
-    'Content-Disposition: attachment; filename="' + fileName + '"',
-    '',
-    wrap76(rtf.toString('base64')),
+    ...[].concat(...atts.map(att => [
+      '--' + boundary,
+      'Content-Type: ' + att.type + '; name="' + att.name + '"',
+      'Content-Transfer-Encoding: base64',
+      'Content-Disposition: attachment; filename="' + att.name + '"',
+      '',
+      wrap76(att.data.toString('base64')),
+    ])),
     '--' + boundary + '--',
     '',
   ].join('\r\n');
@@ -427,18 +492,23 @@ const server = http.createServer((req, res) => {
       fileName = safeName([mapel, kelas, semester, tahunAjaran.replace('/', '-')].join('-'));
     }
     if (!/\.rtf$/i.test(fileName)) fileName += '.rtf';
+    const t0 = Date.now();
+    const lama = () => Math.round((Date.now() - t0) / 1000) + ' dtk';
     try {
+      // File Word asli dari guru (opsional, maks. 15 MB) -> dilampirkan dalam .zip.
+      const asli = typeof body.asliBase64 === 'string' ? Buffer.from(body.asliBase64, 'base64') : null;
+      if (asli && asli.length > 15 * 1024 * 1024) return reply(res, 413, { ok: false, pesan: 'File asli terlalu besar (maks. 15 MB).' });
       const data = buildMessage({
-        nama, mapel, kelas, fileName, rtf, semester, tahunAjaran,
+        nama, mapel, kelas, fileName, rtf, asli, semester, tahunAjaran,
         jumlahSoal: Number.isFinite(body.jumlahSoal) ? body.jumlahSoal : null,
         perluDicek: Number.isFinite(body.perluDicek) ? body.perluDicek : null,
         namaFileAsli: clean(body.namaFileAsli, 160),
       });
       await smtpSend({ from: cfg.user, to: cfg.to, data });
-      log('terkirim', ip, mapel, kelas, nama, fileName, rtf.length + ' B');
+      log('terkirim', ip, mapel, kelas, nama, fileName, rtf.length + ' B', lama());
       reply(res, 200, { ok: true, pesan: 'Soal terkirim ke ' + cfg.to });
     } catch (e) {
-      log('gagal', ip, e.message);
+      log('gagal', ip, mapel, kelas, nama, rtf.length + ' B', lama(), e.message);
       reply(res, 502, { ok: false, pesan: 'Gagal mengirim email: ' + e.message });
     }
   });
@@ -475,6 +545,10 @@ if (process.argv.includes('--cek')) {
   sock.on('error', e => { console.log('\nHASIL: tidak bisa terhubung ke ' + cfg.host + ': ' + e.message); process.exitCode = 1; });
   return;
 }
+
+// Node.js 12 memutus koneksi HTTP yang diam 2 menit (server.timeout bawaan). Pengiriman lampiran besar
+// ke Gmail bisa lebih lama dari itu, jadi batasnya dinaikkan melebihi batas total SMTP.
+server.setTimeout(SMTP_MAX_MS + 60 * 1000);
 
 server.listen(cfg.listenPort, cfg.listenHost, () => {
   log('Layanan kirim soal aktif di http://' + cfg.listenHost + ':' + cfg.listenPort + ' -> ' + cfg.to +

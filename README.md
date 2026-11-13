@@ -134,6 +134,14 @@ Alamat tujuan dikunci di server, sehingga layanan tidak bisa dipakai mengirim ke
 Setelah berhasil, muncul pop-up *"Soal berhasil dikirim"* berisi guru, mata pelajaran, kelas, semester,
 jumlah soal, dan waktu kirim.
 
+Email berisi dua lampiran: **file RTF** dan **file Word asli dari guru dalam .zip** (file asli tidak ikut bila
+soal ditempel sebagai teks). Soal bergambar bisa menghasilkan lampiran beberapa MB; layanan menunggu hingga
+15 menit (putus bila koneksi ke Gmail diam 2 menit), dan tombol menampilkan "Mengirim … MB… bisa beberapa menit".
+
+Gambar di RTF disimpan dua kali, seperti Word: PNG/JPEG untuk program modern dan cadangan WMF untuk ExamView
+(yang hanya membaca WMF). Cadangan WMF memakai palet warna (4-bit atau 8-bit), bukan 24-bit, sehingga RTF
+soal bergambar sekitar separuh ukuran sebelumnya.
+
 Soal pilihan ganda baru bisa ditambahkan dari tombol **Tambah soal** di atas atau di bawah daftar soal, atau ikon
 **+** pada tiap soal (disisipkan tepat di bawah soal itu).
 

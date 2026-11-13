@@ -277,7 +277,9 @@ location = /api/kirim {
     proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim;
     proxy_set_header X-Real-IP \$remote_addr;
     client_max_body_size 40m;
-    proxy_read_timeout 120s;
+    # Lampiran besar (soal bergambar, ±20 MB) bisa makan beberapa menit untuk dikirim ke Gmail.
+    proxy_read_timeout 1200s;
+    proxy_send_timeout 1200s;
 }
 location = /api/kirim/status {
     proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim/status;
