@@ -135,7 +135,10 @@ Setelah berhasil, muncul pop-up *"Soal berhasil dikirim"* berisi guru, mata pela
 jumlah soal, dan waktu kirim.
 
 Email berisi dua lampiran: **file RTF** dan **file Word asli dari guru dalam .zip** (file asli tidak ikut bila
-soal ditempel sebagai teks). Soal bergambar bisa menghasilkan lampiran beberapa MB; layanan menunggu hingga
+soal ditempel sebagai teks). Bila keduanya terlalu besar untuk satu email (batas Gmail 25 MB), file asli dikirim
+di **email kedua** berjudul sama dengan akhiran "(file asli)". File asli di atas 17 MB tidak bisa dikirim lewat
+email: guru diberi tahu di dialog Kirim, dan emailnya mencantumkan alasannya. Log layanan mencatat untuk setiap
+kiriman apakah file asli ikut (`+ file asli …`, `di email kedua`, atau `tanpa file asli (…)`). Soal bergambar bisa menghasilkan lampiran beberapa MB; layanan menunggu hingga
 15 menit (putus bila koneksi ke Gmail diam 2 menit), dan tombol menampilkan "Mengirim … MB… bisa beberapa menit".
 
 Gambar di RTF hanya disimpan sebagai WMF, karena ExamView (pembaca RTF ini) hanya membaca WMF. WMF memakai

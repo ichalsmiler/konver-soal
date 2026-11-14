@@ -707,6 +707,9 @@
 
   // ---------- Konfirmasi Ekspor / Kirim (guru, mapel, kelas, semester, tahun ajaran) ----------
   const META_KEY = 'konver-soal:pengirim';
+  // Batas file Word asli yang ikut dikirim (sama dengan batas lampiran per email di server).
+  const ASLI_MAX = 17 * 1048576;
+  const mbText = n => (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
   // Daftar guru = data bawaan (js/data-guru.js) yang sudah dikoreksi admin + guru tambahan dari admin.
   // Koreksi & tambahan disimpan di server. Tiap baris menyimpan `asal` (baris aslinya) untuk edit/hapus.
   const GURU_BAWAAN = (window.DATA_GURU || []).slice();
@@ -1072,6 +1075,14 @@
       (bad ? ' — ' + bad + ' soal masih ditandai "Perlu dicek".' : '.');
     $('#kirimInfo').classList.toggle('warn-text', bad > 0);
     $('#kirimTujuanRow').hidden = mode !== 'kirim';
+    // Beri tahu guru bila file Word aslinya tidak bisa ikut dikirim.
+    const asliNote = mode !== 'kirim' ? ''
+      : !state.srcFile ? 'Soal ditempel sebagai teks: hanya file RTF yang dikirim.'
+      : state.srcFile.size > ASLI_MAX ? 'File Word asli (' + mbText(state.srcFile.size) + ') terlalu besar untuk email (maks. ' +
+        mbText(ASLI_MAX) + '), jadi hanya file RTF yang dikirim. Kirim file aslinya lewat cara lain bila diperlukan.'
+      : '';
+    $('#kirimAsliNote').textContent = asliNote;
+    $('#kirimAsliNote').hidden = !asliNote;
     $('#kirimOk').textContent = mode === 'kirim' ? 'Ya, kirim' : 'Ya, ekspor';
     try {
       const saved = JSON.parse(localStorage.getItem(META_KEY) || '{}');
@@ -1143,8 +1154,11 @@
         }
         payload.rtfBase64 = btoa(bin);
       }
-      // File Word asli ikut dikirim (server melampirkannya sebagai .zip di samping RTF).
-      if (state.srcFile && state.srcFile.size <= 15 * 1048576) {
+      // File Word asli ikut dikirim (server melampirkannya sebagai .zip; bila RTF + file asli terlalu
+      // besar untuk satu email, file asli dikirim di email kedua). Di atas batas email: tidak dikirim,
+      // tetapi ukurannya diberitahukan agar alasannya tertulis di email.
+      if (state.srcFile && state.srcFile.size > ASLI_MAX) payload.asliBesar = state.srcFile.size;
+      else if (state.srcFile) {
         payload.asliBase64 = await new Promise((ok, no) => {
           const fr = new FileReader();
           fr.onload = () => ok(String(fr.result).split(',')[1] || '');
@@ -1160,7 +1174,7 @@
           ? 'Layanan kirim belum terpasang di server.' : 'Gagal mengirim (kode ' + res.status + ').'));
       }
       $('#kirimDialog').close();
-      showSent(m);
+      showSent(m, data);
     } catch (x) {
       err(x.message || 'Gagal mengirim. Periksa koneksi internet.');
     } finally {
@@ -1171,13 +1185,19 @@
   }
 
   // Pop-up "Soal berhasil dikirim" beserta rincian kiriman.
-  function showSent(m) {
+  function showSent(m, data) {
+    const asli = data && data.asli || '';
+    const lampiran = /^\+ file asli .* email kedua$/.test(asli) ? 'RTF + file asli (email terpisah)'
+      : /^\+ file asli/.test(asli) ? 'RTF + file asli (.zip)'
+      : /terlalu besar/.test(asli) ? 'RTF saja (file asli terlalu besar)'
+      : 'RTF';
     const rows = [
       ['Guru', m.nama],
       ['Mata pelajaran', m.mapel],
       ['Kelas', m.kelas],
       ['Semester', m.semester + ' ' + m.ta + '/' + (Number(m.ta) + 1)],
       ['Jumlah soal', state.questions.length + ' Soal'],
+      ['Lampiran', lampiran],
       ['Waktu', new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })],
     ];
     $('#sentInfo').innerHTML = rows.map(([k, v]) => '<dt>' + escHtml(k) + '</dt><dd>' + escHtml(v) + '</dd>').join('');

@@ -286,7 +286,7 @@ cat > "$API_SNIPPET" <<NGINX
 location = /api/kirim {
     proxy_pass http://127.0.0.1:${KIRIM_PORT}/api/kirim;
     proxy_set_header X-Real-IP \$remote_addr;
-    client_max_body_size 40m;
+    client_max_body_size 64m;  # RTF + file Word asli (s.d. 17 MB)
     # Lampiran besar (soal bergambar, ±20 MB) bisa makan beberapa menit untuk dikirim ke Gmail.
     proxy_read_timeout 1200s;
     proxy_send_timeout 1200s;

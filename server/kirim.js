@@ -247,11 +247,46 @@ const encWord = s => '=?UTF-8?B?' + Buffer.from(s, 'utf8').toString('base64') + 
 const wrap76 = s => s.replace(/(.{76})/g, '$1\r\n');
 const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf, asli, jumlahSoal, perluDicek, namaFileAsli }) {
+// Batas lampiran per email: Gmail menolak email > 25 MB, dan lampiran membesar ±37% saat dikodekan base64.
+// 17 MB lampiran -> ±23,3 MB email (diuji: lampiran 16 MB -> email 21,9 MB).
+const MAIL_MAX_ATT = 17 * 1024 * 1024;
+const mbStr = n => (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+
+/**
+ * Rencana email: RTF + file Word asli (.zip). Bila keduanya terlalu besar untuk satu email,
+ * file asli dikirim di email kedua; bila file asli sendiri melebihi batas, tidak dilampirkan
+ * dan alasannya ditulis di email.
+ * @returns { emails: [{ atts, catatan, judul }], ringkas } (ringkas: untuk log)
+ */
+function rencanaEmail(info) {
+  const { fileName, rtf, asli, asliBesar, namaFileAsli } = info;
+  const rtfAtt = { name: fileName, type: 'application/rtf', data: rtf };
+  const namaAsli = safeName(namaFileAsli || 'file-asli.docx');
+  if (asliBesar) {
+    const why = 'File asli dari guru (' + mbStr(asliBesar) + ') terlalu besar untuk email, jadi tidak dilampirkan.';
+    return { emails: [{ atts: [rtfAtt], catatan: 'File RTF terlampir. ' + why, judul: '' }], ringkas: 'tanpa file asli (' + mbStr(asliBesar) + ', terlalu besar)' };
+  }
+  if (!asli || !asli.length) {
+    return { emails: [{ atts: [rtfAtt], catatan: 'File RTF terlampir. (Soal ditempel sebagai teks, tidak ada file asli.)', judul: '' }], ringkas: 'tanpa file asli (teks tempel)' };
+  }
+  const zipAtt = { name: namaAsli.replace(/\.[^.]*$/, '') + '.zip', type: 'application/zip', data: makeZip(namaAsli, asli) };
+  if (rtf.length + zipAtt.data.length <= MAIL_MAX_ATT) {
+    return { emails: [{ atts: [rtfAtt, zipAtt], catatan: 'Terlampir: file RTF dan file asli dari guru (dalam .zip).', judul: '' }], ringkas: '+ file asli ' + mbStr(zipAtt.data.length) };
+  }
+  return {
+    emails: [
+      { atts: [rtfAtt], catatan: 'File RTF terlampir. File asli dari guru (' + mbStr(zipAtt.data.length) + ') dikirim di email terpisah karena terlalu besar untuk satu email.', judul: '' },
+      { atts: [zipAtt], catatan: 'Terlampir: file asli dari guru (dalam .zip), pasangan email RTF dengan judul yang sama.', judul: ' (file asli)' },
+    ],
+    ringkas: '+ file asli ' + mbStr(zipAtt.data.length) + ' di email kedua',
+  };
+}
+
+function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, jumlahSoal, perluDicek, namaFileAsli }, { atts, catatan, judul }) {
   const boundary = 'ks-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   const altBoundary = boundary + '-alt';
   const subject = 'Soal ' + mapel + ' - Kelas ' + kelas +
-    (semester ? ' - Semester ' + semester : '') + (tahunAjaran ? ' ' + tahunAjaran : '') + ' - ' + nama;
+    (semester ? ' - Semester ' + semester : '') + (tahunAjaran ? ' ' + tahunAjaran : '') + ' - ' + nama + judul;
   // Singkat: "24/10/2026 14.34" (tanpa detik).
   const waktu = new Date().toLocaleString('id-ID', {
     timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -267,15 +302,6 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
     ['File asli', namaFileAsli || '-'],
     ['Waktu kirim', waktu + ' WITA'],
   ];
-  // Lampiran: file RTF apa adanya + file Word asli dari guru di dalam .zip (bila ikut dikirim).
-  const atts = [{ name: fileName, type: 'application/rtf', data: rtf }];
-  if (asli && asli.length) {
-    const namaAsli = safeName(namaFileAsli || 'file-asli.docx');
-    atts.push({ name: namaAsli.replace(/\.[^.]*$/, '') + '.zip', type: 'application/zip', data: makeZip(namaAsli, asli) });
-  }
-  const catatan = atts.length > 1
-    ? 'Terlampir: file RTF dan file asli dari guru (dalam .zip).'
-    : 'File RTF terlampir.';
   // Teks biasa: sejajar bila dibaca dengan huruf monospace.
   const width = Math.max(...rows.map(r => r[0].length));
   const text = ['Kiriman soal dari aplikasi Konver Soal.', '']
@@ -325,6 +351,9 @@ function buildMessage({ nama, mapel, kelas, semester, tahunAjaran, fileName, rtf
 }
 
 // ---------- HTTP ----------
+// Body kiriman: RTF (teks, maks. 20 MB) + file Word asli (base64, maks. 17 MB), dikompres gzip.
+const MAX_JSON = 64 * 1024 * 1024;  // setelah gzip dibuka
+const MAX_BODY = 56 * 1024 * 1024;  // sebelum dibuka (nginx: client_max_body_size 64m)
 const hits = new Map(); // ip -> [waktu kirim]
 function rateOk(ip) {
   const now = Date.now();
@@ -457,7 +486,7 @@ const server = http.createServer((req, res) => {
   let size = 0;
   req.on('data', c => {
     size += c.length;
-    if (size > cfg.maxBytes * 1.4) { reply(res, 413, { ok: false, pesan: 'File terlalu besar.' }); req.destroy(); return; }
+    if (size > MAX_BODY) { reply(res, 413, { ok: false, pesan: 'File terlalu besar.' }); req.destroy(); return; }
     chunks.push(c);
   });
   req.on('end', async () => {
@@ -467,8 +496,8 @@ const server = http.createServer((req, res) => {
       let raw = Buffer.concat(chunks);
       // Aplikasi mengompres body dengan gzip (±10x lebih kecil, unggah jauh lebih cepat).
       if (/gzip/i.test(req.headers['content-encoding'] || '')) {
-        raw = await new Promise((ok, no) => zlib.gunzip(raw, { maxOutputLength: cfg.maxBytes * 2 }, (e, out) => (e ? no(e) : ok(out))));
-        if (raw.length > cfg.maxBytes * 2) return reply(res, 413, { ok: false, pesan: 'File terlalu besar.' });
+        raw = await new Promise((ok, no) => zlib.gunzip(raw, { maxOutputLength: MAX_JSON }, (e, out) => (e ? no(e) : ok(out))));
+        if (raw.length > MAX_JSON) return reply(res, 413, { ok: false, pesan: 'File terlalu besar.' });
       }
       body = JSON.parse(raw.toString('utf8'));
     } catch (e) { return reply(res, 400, { ok: false, pesan: 'Data tidak valid.' }); }
@@ -495,18 +524,21 @@ const server = http.createServer((req, res) => {
     const t0 = Date.now();
     const lama = () => Math.round((Date.now() - t0) / 1000) + ' dtk';
     try {
-      // File Word asli dari guru (opsional, maks. 15 MB) -> dilampirkan dalam .zip.
-      const asli = typeof body.asliBase64 === 'string' ? Buffer.from(body.asliBase64, 'base64') : null;
-      if (asli && asli.length > 15 * 1024 * 1024) return reply(res, 413, { ok: false, pesan: 'File asli terlalu besar (maks. 15 MB).' });
-      const data = buildMessage({
-        nama, mapel, kelas, fileName, rtf, asli, semester, tahunAjaran,
+      // File Word asli dari guru -> .zip. asliBesar: ukuran file asli yang tidak ikut dikirim aplikasi
+      // karena melebihi batas email (agar alasannya tertulis di email dan log).
+      let asli = typeof body.asliBase64 === 'string' ? Buffer.from(body.asliBase64, 'base64') : null;
+      let asliBesar = Number.isFinite(body.asliBesar) && body.asliBesar > 0 ? body.asliBesar : 0;
+      if (asli && asli.length > MAIL_MAX_ATT) { asliBesar = asli.length; asli = null; }
+      const info = {
+        nama, mapel, kelas, fileName, rtf, asli, asliBesar, semester, tahunAjaran,
         jumlahSoal: Number.isFinite(body.jumlahSoal) ? body.jumlahSoal : null,
         perluDicek: Number.isFinite(body.perluDicek) ? body.perluDicek : null,
         namaFileAsli: clean(body.namaFileAsli, 160),
-      });
-      await smtpSend({ from: cfg.user, to: cfg.to, data });
-      log('terkirim', ip, mapel, kelas, nama, fileName, rtf.length + ' B', lama());
-      reply(res, 200, { ok: true, pesan: 'Soal terkirim ke ' + cfg.to });
+      };
+      const rencana = rencanaEmail(info);
+      for (const email of rencana.emails) await smtpSend({ from: cfg.user, to: cfg.to, data: buildMessage(info, email) });
+      log('terkirim', ip, mapel, kelas, nama, fileName, rtf.length + ' B', rencana.ringkas, lama());
+      reply(res, 200, { ok: true, pesan: 'Soal terkirim ke ' + cfg.to, emails: rencana.emails.length, asli: rencana.ringkas });
     } catch (e) {
       log('gagal', ip, mapel, kelas, nama, rtf.length + ' B', lama(), e.message);
       reply(res, 502, { ok: false, pesan: 'Gagal mengirim email: ' + e.message });
